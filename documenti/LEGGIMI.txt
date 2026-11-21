@@ -1,0 +1,4 @@
+Inserire qui i documenti scaricabili (manuali, regolamento, moduli) e
+elencarli in js/config.js, ad esempio:
+
+documenti:[{titolo:'Regolamento reperibilità',descrizione:'Versione 2026',file:'regolamento.pdf'}]

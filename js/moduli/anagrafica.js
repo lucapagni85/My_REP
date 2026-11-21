@@ -5,8 +5,8 @@ const ZONE={1:['Ovest','Nord'],2:['Ovest','Centro'],3:['Ovest','Sud'],4:['Est','
 const areaZona=z=>`${ZONE[z][0]} · Zona ${z} · ${ZONE[z][1]}`;
 
 let anF={ruolo:'',stato:'att',q:''}, anEd=null, anErr=[], anMsg='';
-const anVuota=()=>({id:null,n:'',mat:'',r:'',z:'',t1:'',t2:'',em:'',res:''});
-const anDa=p=>({id:p.id,n:p.n,mat:p.mat||'',r:p.r,z:p.z||'',t1:(p.t||[])[0]||'',t2:(p.t||[])[1]||'',em:p.em||'',res:p.res||''});
+const anVuota=()=>({id:null,n:'',mat:'',r:'',z:'',t1:'',t2:'',em:'',res:'',ra:[]});
+const anDa=p=>({id:p.id,n:p.n,mat:p.mat||'',r:p.r,z:p.z||'',t1:(p.t||[])[0]||'',t2:(p.t||[])[1]||'',em:p.em||'',res:p.res||'',ra:(p.ra||[]).slice()});
 
 function anFiltra(){
   const q=anF.q.trim().toLowerCase();
@@ -18,11 +18,12 @@ function anFiltra(){
 function anTabella(){
   const L=anFiltra();
   if(!L.length)return '<p class="soon">Nessuna persona corrisponde ai filtri.</p>';
-  return `<div class="tw"><table><thead><tr><th>ID</th><th>Nominativo</th><th>Ruolo</th><th>Area</th><th>Recapiti</th><th>Stato</th><th></th></tr></thead><tbody>${
+  return `<div class="tw"><table><thead><tr><th>ID</th><th>Nominativo</th><th>Ruolo</th><th>Area</th><th>Residenza</th><th>Recapiti</th><th>Stato</th><th></th></tr></thead><tbody>${
     L.map(p=>{const ces=p.attivo===false;
       return `<tr class="${ces?'ces':''}"><td class="num">${p.id}</td>
         <td><b>${esc(p.n)}</b>${p.mat?`<small>Matricola ${esc(p.mat)}</small>`:''}</td>
-        <td><span class="rl ${p.r}">${RUOLI[p.r]||'—'}</span></td><td>${esc(p.ar||'')}</td>
+        <td><span class="rl ${p.r}">${RUOLI[p.r]||'—'}</span>${(p.ra||[]).length?`<small>anche: ${p.ra.map(x=>RUOLI[x]).join(', ')}</small>`:''}</td><td>${esc(p.ar||'')}</td>
+        <td>${p.res?esc(p.res):'<span style="color:var(--muted)">—</span>'}</td>
         <td>${(p.t||[]).filter(Boolean).map(x=>esc(x)).join('<br>')}${p.em?`<small>${esc(p.em)}</small>`:''}</td>
         <td><span class="pill${ces?' off':''}">${ces?'Cessato':'In servizio'}</span></td>
         <td style="white-space:nowrap"><button class="mini" data-mod="${p.id}">Modifica</button><button class="mini" data-${ces?'att':'ces'}="${p.id}">${ces?'Riattiva':'Cessa'}</button></td></tr>`}).join('')
@@ -51,7 +52,9 @@ function viewAnForm(){
       <label>Ruolo *<select id="anRu"><option value="">Scegli…</option>${Object.entries(RUOLI).map(([k,v])=>`<option value="${k}"${e.r===k?' selected':''}>${v}</option>`).join('')}</select></label>
       ${e.r==='A'?`<label>Zona *<select data-f="z"><option value="">Scegli…</option>${Object.keys(ZONE).map(z=>`<option value="${z}"${+e.z===+z?' selected':''}>${areaZona(z)}</option>`).join('')}</select></label>`:''}
       ${f('t1','Telefono 1','type="tel"')}${f('t2','Telefono 2','type="tel"')}${f('em','Email','type="email"')}${f('res','Residenza')}
+      <div class="ra" style="grid-column:1/-1"><span>Può operare anche come</span>${Object.entries(RUOLI).filter(([k])=>k!==e.r).map(([k,v])=>`<label class="chk"><input type="checkbox" data-ra="${k}"${(e.ra||[]).includes(k)?' checked':''}>${v}</label>`).join('')}</div>
     </div>
+    <p style="color:var(--muted);font-size:.85rem;margin:10px 0 0">Esempio: un coordinatore che a volte fa il supervisore. Il vice coordinatore vede in automatico anche la scheda Coordinatore nel suo turno: non serve impostarlo qui.</p>
     <p style="color:var(--muted);font-size:.85rem;margin:14px 0 0">${nuova?'L’id progressivo viene assegnato dal sistema al salvataggio.':'Le modifiche ai recapiti non cambiano i turni già salvati.'} I campi con * sono obbligatori.</p>
     <div class="tool" style="margin-top:14px"><button class="go" id="anSv">Salva</button><button class="ghost" id="anNo">Annulla</button></div></div>`;
 }
@@ -69,6 +72,7 @@ async function anSalva(){
   if(om.length&&!confirm(`Esiste già ${om.length>1?om.length+' persone':'una persona'} con il nominativo «${n}» (id ${om.map(a=>a.id).join(', ')}). Salvare comunque come persona distinta?`))return;
   const vecchia=e.id?ANAG.find(a=>a.id===e.id):null;
   const p=Object.assign(vecchia?clone(vecchia):{attivo:true},{n,r:e.r,t:[e.t1.trim(),e.t2.trim()].filter(Boolean)});
+  const ra=(e.ra||[]).filter(x=>x!==e.r&&RUOLI[x]);if(ra.length)p.ra=ra;else delete p.ra;
   if(e.id)p.id=e.id;
   for(const [k,v] of [['mat',mat],['em',em],['res',e.res.trim()]]){if(v)p[k]=v;else delete p[k]}
   if(e.r==='A'){p.z=+e.z;p.s=ZONE[p.z][1];p.ar=areaZona(p.z)}else{delete p.z;delete p.s;delete p.ar}
@@ -81,7 +85,8 @@ function bindAnagrafica(){
   const v=$('#view');
   if(anEd!==null){
     v.querySelectorAll('[data-f]').forEach(i=>i.oninput=()=>{anEd[i.dataset.f]=i.value});
-    $('#anRu').onchange=e=>{anEd.r=e.target.value;if(anEd.r!=='A')anEd.z='';anErr=[];render()};
+    v.querySelectorAll('[data-ra]').forEach(i=>i.onchange=()=>{anEd.ra=[...v.querySelectorAll('[data-ra]:checked')].map(x=>x.dataset.ra)});
+    $('#anRu').onchange=e=>{anEd.r=e.target.value;if(anEd.r!=='A')anEd.z='';anEd.ra=(anEd.ra||[]).filter(x=>x!==anEd.r);anErr=[];render()};
     $('#anSv').onclick=anSalva;
     $('#anNo').onclick=()=>{anEd=null;anErr=[];render()};
     return;

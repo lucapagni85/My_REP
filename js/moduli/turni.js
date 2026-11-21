@@ -281,6 +281,8 @@ function render(){
     $('#pdf').onclick=()=>{const t=document.title;document.title='Turni_reperibilita_'+meseSel+'_'+CONFIG.versione;window.print();document.title=t};
   } else if(tab==='anagrafica'){
     v.innerHTML=viewAnagrafica();bindAnagrafica();
+  } else if(tab==='utenti'){
+    v.innerHTML=viewUtenti();bindUtenti();
   } else {
     v.innerHTML=viewGenera();bindGenera();
   }
@@ -296,10 +298,13 @@ function turnoAl(d){
     return{slot:k,profilo:SLOTS[k][0],area:s.area||SLOTS[k][1],id:p.id||null,nome:p.n,tel:(p.t||[]).filter(Boolean),titolare:tit,note};});
   return{mese:d.slice(0,7),turno:r.n,dal:iso(r.a),al:iso(r.b),rev:mese.rev===undefined?null:mese.rev,righe};
 }
-function montaTurni(root){
+const TABS={corso:'Turno in corso',archivio:'Archivio turni',genera:'Genera turni',anagrafica:'Anagrafica',utenti:'Utenti'};
+/* opz.tabs: quali schede mostrare (Turni: corso, archivio; Amministrazione: genera, anagrafica, utenti) */
+function montaTurni(root,opz={}){
   if(Store.richiedeLogin)auth=!!Store.admin;          /* con login reale: modifica solo per gli admin */
-  const adm=!Store.richiedeLogin||Store.admin;
-  root.innerHTML=`<div id="m-turni"><nav class="tabs" role="tablist"><button role="tab" aria-selected="true" data-v="corso">Turno in corso</button><button role="tab" aria-selected="false" data-v="archivio">Archivio turni</button>${adm?'<button role="tab" aria-selected="false" data-v="genera">Genera turni</button><button role="tab" aria-selected="false" data-v="anagrafica">Anagrafica</button>':''}</nav><section id="view"></section></div>`;
+  const tabs=opz.tabs||['corso','archivio'];
+  if(!tabs.includes(tab))tab=tabs[0];
+  root.innerHTML=`<div id="m-turni"><nav class="tabs" role="tablist">${tabs.map(t=>`<button role="tab" aria-selected="${t===tab}" data-v="${t}">${TABS[t]}</button>`).join('')}</nav><section id="view"></section></div>`;
   root.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>{tab=b.dataset.v;root.querySelectorAll('nav.tabs button').forEach(x=>x.setAttribute('aria-selected',x===b));render()});
   render();
 }

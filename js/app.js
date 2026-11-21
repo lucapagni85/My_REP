@@ -1,5 +1,4 @@
-/* Shell: sceglie l'adattatore dati, gestisce il login all'avvio (adattatori remoti) e monta il modulo.
-   In futuro: menu con più moduli (turni, supervisore, coordinatore, addetto). */
+/* Shell: sceglie l'adattatore dati, gestisce il login all'avvio (adattatori remoti) e monta il contenitore con il menu per ruolo. */
 function schermataErrore(root,titolo,msg){
   root.innerHTML=`<div class="panel login"><h2>${esc(titolo)}</h2><p style="margin:0;color:var(--muted)">${esc(msg)}</p><button class="go" id="rt" style="margin:0">Riprova</button></div>`;
   $('#rt').onclick=()=>location.reload();
@@ -18,6 +17,35 @@ function schermataLogin(root){
     $('#lg2').onclick=go;$('#lp').onkeydown=e=>{if(e.key==='Enter')go()};$('#lu').focus();
   });
 }
+/* ===== Contenitore con menu per ruolo (V00.09) ===== */
+const SEZIONI=[
+  {id:'turni',t:'Turni'},
+  {id:'addetto',t:'Addetto',l:'A'},{id:'coordinatore',t:'Coordinatore',l:'C'},{id:'supervisore',t:'Supervisore',l:'S'},
+  {id:'help',t:'Help'},
+  {id:'amm',t:'Amministrazione',admin:true}
+];
+function sezioniVisibili(){
+  const v=schedeVisibili();
+  return SEZIONI.filter(s=>s.l?v[s.l]:s.admin?tuttiAdmin():true);
+}
+function contenitore(root){
+  root.innerHTML='<nav class="menu" id="menu" aria-label="Sezioni"></nav><div id="avviso"></div><div id="sez"></div>';
+  if(Store.richiedeLogin&&!Store.admin&&!personaMia())
+    $('#avviso').innerHTML='<div class="alerts"><h3>Account non ancora collegato</h3>Il tuo account non è collegato a una persona dell’anagrafica, quindi non vedi le schede di compilazione. Rivolgiti all’amministratore.</div>';
+  const vai=()=>{
+    const vis=sezioniVisibili();
+    let id=location.hash.slice(1);if(!vis.some(s=>s.id===id))id='turni';
+    $('#menu').innerHTML=vis.map(s=>`<a href="#${s.id}"${s.id===id?' aria-current="page"':''}>${s.t}</a>`).join('');
+    const el=$('#sez');
+    if(id==='turni')Moduli.turni.monta(el,{tabs:['corso','archivio']});
+    else if(id==='amm')Moduli.turni.monta(el,{tabs:['genera','anagrafica','utenti']});
+    else if(id==='help')Moduli.help.monta(el);
+    else Moduli.ruoli.monta(el,SEZIONI.find(s=>s.id===id).l);
+    window.scrollTo(0,0);
+  };
+  addEventListener('hashchange',vai);vai();
+}
+
 (async function(){
   const root=document.getElementById('app');
   const q=new URLSearchParams(location.search).get('adapter');
@@ -40,6 +68,6 @@ function schermataLogin(root){
     if(Store.offline)addEventListener('online',()=>location.reload());   /* la modalità offline è di sola lettura: nessuna modifica da perdere */
     $('#esci').onclick=()=>Store.logout();
   }
-  Moduli.turni.monta(root);
+  contenitore(root);
   if('serviceWorker' in navigator&&/^https?:$/.test(location.protocol))navigator.serviceWorker.register('sw.js').catch(()=>{});
 })();

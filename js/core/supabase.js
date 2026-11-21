@@ -9,7 +9,7 @@ const SupabaseAdapter={
   leggiCache(){try{return JSON.parse(localStorage.getItem(this.CK)||'null')}catch(e){return null}},
   scriviCache(){
     if(!CONFIG.cacheOffline||!this.utente)return;
-    const persone=ANAG.map(({id,n,r,t,z,s,ar,attivo})=>({id,n,r,t,z,s,ar,attivo}));
+    const persone=ANAG.map(({id,n,r,t,z,s,ar,attivo,ra})=>({id,n,r,t,z,s,ar,attivo,ra}));
     try{localStorage.setItem(this.CK,JSON.stringify({u:this.utente,ts:new Date().toISOString(),persone,mesi:DATA}))}catch(e){}
   },
   daCache(){
@@ -30,10 +30,11 @@ const SupabaseAdapter={
   },
   async profilo(u){
     let ruolo=null;
-    try{const{data,error}=await this.sb.from('profili').select('ruolo').eq('id',u.id).maybeSingle();
-      if(!error)ruolo=(data&&data.ruolo)||'utente';else if(!erroreRete(error))ruolo='utente'}catch(e){}
-    if(ruolo===null){const c=this.leggiCache();ruolo=c&&c.u&&c.u.id===u.id?c.u.ruolo:'utente'}   /* rete assente: ultimo ruolo noto */
-    this.utente={id:u.id,email:u.email,ruolo};this.admin=ruolo==='admin';
+    let personaId=null;
+    try{const{data,error}=await this.sb.from('profili').select('ruolo,persona_id').eq('id',u.id).maybeSingle();
+      if(!error){ruolo=(data&&data.ruolo)||'utente';personaId=(data&&data.persona_id)||null}else if(!erroreRete(error))ruolo='utente'}catch(e){}
+    if(ruolo===null){const c=this.leggiCache(),ok=c&&c.u&&c.u.id===u.id;ruolo=ok?c.u.ruolo:'utente';personaId=ok?c.u.personaId||null:null}   /* rete assente: ultimi valori noti */
+    this.utente={id:u.id,email:u.email,ruolo,personaId};this.admin=ruolo==='admin';
   },
   async login(email,pwd){
     if(!email||!pwd)return{ok:false,errore:'Inserisci email e password'};
@@ -49,15 +50,32 @@ const SupabaseAdapter={
   },
   async carica(){
     let p,m;
-    try{[p,m]=await Promise.all([this.sb.from('persone').select('id,dati').order('id'),this.sb.from('mesi').select('chiave,dati,rev,agg')])}
+    /* admin: anagrafica completa; gli altri: vista ridotta (nome, ruolo, telefoni, zona) + il proprio record completo */
+    const tabP=this.admin?'persone':'persone_pubbliche';
+    try{[p,m]=await Promise.all([this.sb.from(tabP).select('id,dati').order('id'),this.sb.from('mesi').select('chiave,dati,rev,agg')])}
     catch(e){p={error:e};m={}}
     const er=p.error||m.error;
     if(er&&erroreRete(er)&&this.daCache())return;
     if(er)throw new Error('Lettura dati non riuscita: '+er.message+' (lo script SQL è stato eseguito?)');
     ANAG.splice(0,ANAG.length,...p.data.map(r=>Object.assign({},r.dati,{id:r.id})));   /* prima l'anagrafica: normalizza() la usa */
+    if(!this.admin&&this.utente&&this.utente.personaId){
+      try{const o=await this.sb.from('persone').select('id,dati').eq('id',this.utente.personaId).maybeSingle();
+        if(o.data){const i=ANAG.findIndex(x=>x.id===o.data.id),n=Object.assign({},o.data.dati,{id:o.data.id});if(i<0)ANAG.push(n);else ANAG[i]=n}}catch(e){}
+    }
     for(const k of Object.keys(DATA))delete DATA[k];
     m.data.forEach(r=>{DATA[r.chiave]=normalizza(Object.assign({},r.dati,{rev:r.rev,agg:r.agg}))});
     this.offline=false;this.scriviCache();
+  },
+  async elencoUtenti(){
+    const{data,error}=await this.sb.from('profili').select('id,email,ruolo,persona_id').order('email');
+    if(error)throw new Error(error.message);return data||[];
+  },
+  async collegaUtente(id,personaId){
+    const{data,error}=await this.sb.from('profili').update({persona_id:personaId}).eq('id',id).select('id');
+    if(error)return{ok:false,errore:error.code==='23505'?'questa persona è già collegata a un altro account':error.message};
+    if(!data||!data.length)return{ok:false,errore:'permesso negato'};
+    if(this.utente&&this.utente.id===id)this.utente.personaId=personaId;
+    return{ok:true};
   },
   async salvaMese(k,mese,baseRev,opz={}){
     const c=clone(mese);delete c.baseRev;delete c.rev;delete c.agg;

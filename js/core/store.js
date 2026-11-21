@@ -3,6 +3,7 @@
      init()                              prepara l'adattatore; il locale carica subito anagrafica e mesi in ANAG e DATA (cache in memoria)
      richiedeLogin, utente, admin        se richiedeLogin=true l'app chiede il login all'avvio e poi chiama carica()
      carica()                            (solo adattatori remoti) legge anagrafica e mesi in ANAG e DATA
+     elencoUtenti() / collegaUtente(id, personaId)   (solo remoti, solo admin) account di accesso e collegamento a una persona; utente.personaId
      salvaMese(k, mese, baseRev, opz)    -> {ok, rev, agg} | {ok:false, conflitto:true, attuale} | {ok:false, errore}
      salvaPersona(p)                     -> {ok, id} | {ok:false, errore}   (p senza id = nuova persona: l'id lo assegna l'adattatore)
      importa(mesi, anagrafica) / esporta()
