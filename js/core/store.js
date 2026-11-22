@@ -3,6 +3,7 @@
      init()                              prepara l'adattatore; il locale carica subito anagrafica e mesi in ANAG e DATA (cache in memoria)
      richiedeLogin, utente, admin        se richiedeLogin=true l'app chiede il login all'avvio e poi chiama carica()
      carica()                            (solo adattatori remoti) legge anagrafica e mesi in ANAG e DATA
+     leggiRegistro(k,n,L,pid) / salvaRegistro(k,n,L,pid,dati,baseRev,invia,forza)   registri per turno, ruolo e persona, con revisione e invio
      elencoUtenti() / collegaUtente(id, personaId)   (solo remoti, solo admin) account di accesso e collegamento a una persona; utente.personaId
      salvaMese(k, mese, baseRev, opz)    -> {ok, rev, agg} | {ok:false, conflitto:true, attuale} | {ok:false, errore}
      salvaPersona(p)                     -> {ok, id} | {ok:false, errore}   (p senza id = nuova persona: l'id lo assegna l'adattatore)
@@ -51,6 +52,28 @@ const LocalAdapter={
     DATA[k]=c;
     if(!this.scrivi()){if(ex)DATA[k]=ex;else delete DATA[k];return{ok:false,errore:'memoria del browser non disponibile'}}
     return{ok:true,rev:c.rev,agg:c.agg};
+  },
+  /* Registri (V00.10), stesso contratto dell'adattatore Supabase */
+  LSR:'turni_registri_v1',
+  regLeggi(){try{return JSON.parse(localStorage.getItem(this.LSR)||'{}')}catch(e){return{}}},
+  async leggiRegistro(k,n,L,pid){const r=this.regLeggi()[`${k}|${n}|${L}|${pid}`];return r?clone(r):null},
+  async salvaRegistro(k,n,L,pid,dati,baseRev,invia=false,forza=false){
+    const all=this.regLeggi(),key=`${k}|${n}|${L}|${pid}`,ex=all[key],ts=new Date().toISOString(),base=baseRev===undefined?null:baseRev;
+    let r;
+    if(ex){
+      if(dati===null){r=ex;if(invia){r.inviatoRev=r.rev;r.inviatoIl=ts}}
+      else{
+        if(!forza&&base!==ex.rev)return{ok:false,conflitto:true,attuale:ex.rev};
+        r={dati:clone(dati),rev:ex.rev+1,inviatoRev:invia?ex.rev+1:ex.inviatoRev,inviatoIl:invia?ts:ex.inviatoIl,agg:ts};
+      }
+    }else{
+      if(dati===null)return{ok:false,errore:'registro non ancora salvato'};
+      if(!forza&&base!==null)return{ok:false,conflitto:true,attuale:null};
+      r={dati:clone(dati),rev:0,inviatoRev:invia?0:null,inviatoIl:invia?ts:null,agg:ts};
+    }
+    all[key]=r;
+    try{localStorage.setItem(this.LSR,JSON.stringify(all))}catch(e){return{ok:false,errore:'memoria del browser non disponibile'}}
+    return{ok:true,rev:r.rev,inviatoRev:r.inviatoRev,inviatoIl:r.inviatoIl,agg:r.agg};
   },
   async importa(M,A){
     if(A&&Array.isArray(A.persone)){this.caricaAnag(A);this.scriviAnag()}   /* prima l'anagrafica: normalizza() la usa */

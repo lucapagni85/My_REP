@@ -4,7 +4,7 @@
 const RUOLO_T={A:'Addetto',C:'Coordinatore',S:'Supervisore'};
 const SLOT_RUOLI={SUP:['S'],COO:['C'],VICE:['A','C'],Z1:['A'],Z2:['A'],Z3:['A'],Z4:['A'],Z5:['A'],Z6:['A']};
 const RIGA_CL={SUP:'r-sup',COO:'r-coo',VICE:'r-vic'};
-let rlL='A', rlSt={k:null,n:null,pid:null};
+let rlL='A', rlSt={k:null,n:null,pid:null,passo:1}, rlCtx=null;
 
 /* Turni selezionabili: quelli degli ultimi tre mesi presenti in archivio, dal più recente. */
 function rlElenco(){
@@ -54,8 +54,13 @@ function viewRuolo(L,oggi=new Date()){
   const righe=ORDER.filter(s=>tt[s]).map(s=>{const x=tt[s],mio=miei.includes(s),a=x.area||SLOTS[s][1];
     return `<tr class="${RIGA_CL[s]||'r-add'}"><td>${etichSlot(s)}${a?`<br><small style="color:var(--muted)">${esc(a)}</small>`:''}</td><td><b>${esc(x.n)}</b>${mio?' <span class="pill">tu</span>':''}</td><td>${rlTel(x.t)}</td></tr>`}).join('');
   const varz=varTxt(m,t.n);
-  return `<div class="panel"><div class="banner"><div><small>Scheda</small><h2>${nome}</h2></div><span class="pill">Registro e riepilogo: V00.10</span></div>
-    ${sim}
+  /* Addetto: percorso a passi con registro, riepilogo e verifiche (registro.js). Le altre schede arrivano dopo. */
+  const mia=personaMia(),ctx={L,p,k:t.k,n:t.n,a:t.a,b:t.b,m,tt,sola:!(p&&!Store.offline&&(Store.richiedeLogin?!!mia&&mia.id===p.id:true))};
+  if(L==='A')rlCtx=ctx;
+  const stepper=L==='A'?`<nav class="passi" aria-label="Passi">${['Turno','Registro','Riepilogo','Verifiche e invio'].map((x,i)=>`<button data-rg="passo" data-p="${i+1}"${rlSt.passo===i+1?' aria-current="step"':''}><span>${i+1}</span>${x}</button>`).join('')}</nav>`:'';
+  const testa=`<div class="banner"><div><small>Scheda</small><h2>${nome}</h2></div>${L==='A'?'':'<span class="pill">Registro e riepilogo: in arrivo</span>'}</div>${sim}${stepper}`;
+  if(L==='A'&&rlSt.passo>1)return `<div class="panel">${testa}${RG.view(rlSt.passo,ctx)}</div>`;
+  return `<div class="panel">${testa}
     <div class="sec" style="margin-top:0"><h3>Chi compila</h3>${chi}</div>
     <div class="sec"><h3>Turno</h3>
       <div class="tool"><select id="rlT" aria-label="Turno">${el.map(x=>`<option value="${x.k}|${x.n}"${x.k===t.k&&x.n===t.n?' selected':''}>${x.n}° turno · ${nomeMese(x.k)} · dal ${it(x.a).slice(0,5)} al ${it(x.b).slice(0,5)}${p&&slotsDi(p,x.k,x.n).length?' ●':''}</option>`).join('')}</select>
@@ -64,12 +69,19 @@ function viewRuolo(L,oggi=new Date()){
       ${nota}
       <div class="sheet"><div class="tw"><table><thead><tr><th>Ruolo</th><th>Nominativo</th><th>Recapiti</th></tr></thead><tbody>${righe}</tbody></table></div>
       ${varz.length?`<ul class="vn">${varz.map(v=>`<li>${esc(v)}</li>`).join('')}</ul>`:''}</div></div>
-    <div class="sec"><div class="soon" style="padding:24px 10px"><h2>Registro degli interventi e riepilogo del turno</h2>In arrivo con la prossima versione: compilazione, controlli, PDF ed Excel.</div></div></div>`;
+    ${L==='A'?'<div class="tool rg-nav"><span class="sp"></span><button class="go" data-rg="passo" data-p="2">Avanti → Registro</button></div>':'<div class="sec"><div class="soon" style="padding:24px 10px"><h2>Registro degli interventi e riepilogo del turno</h2>In arrivo con le prossime versioni.</div></div>'}</div>`;
 }
 function rlRender(){
   const el=$('#m-ruolo');if(!el)return;
   el.innerHTML=viewRuolo(rlL);
   const t=$('#rlT');if(t)t.onchange=e=>{const[k,n]=e.target.value.split('|');rlSt.k=k;rlSt.n=+n;rlRender()};
   const s=$('#rlP');if(s)s.onchange=e=>{rlSt.pid=e.target.value?+e.target.value:null;rlSt.k=rlSt.n=null;rlRender()};
+  el.onclick=e=>{
+    const b=e.target.closest('[data-rg]');if(!b)return;
+    if(b.dataset.rg==='passo'){rlSt.passo=+b.dataset.p;rlRender();window.scrollTo(0,0);return}
+    RG.onClick(b,rlRender);
+  };
+  el.oninput=RG.onInput;el.onchange=e=>RG.onChange(e,rlRender);
+  if(rlL==='A'&&rlSt.passo>1&&rlCtx)RG.assicura(rlCtx,rlRender);
 }
-Moduli.ruoli={id:'ruoli',titolo:'Schede dei ruoli',monta(el,L){rlL=L;el.innerHTML='<div id="m-ruolo"></div>';rlRender()}};
+Moduli.ruoli={id:'ruoli',titolo:'Schede dei ruoli',monta(el,L){rlL=L;rlSt.passo=1;el.innerHTML='<div id="m-ruolo"></div>';rlRender()}};

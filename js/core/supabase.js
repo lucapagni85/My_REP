@@ -50,18 +50,12 @@ const SupabaseAdapter={
   },
   async carica(){
     let p,m;
-    /* admin: anagrafica completa; gli altri: vista ridotta (nome, ruolo, telefoni, zona) + il proprio record completo */
-    const tabP=this.admin?'persone':'persone_pubbliche';
-    try{[p,m]=await Promise.all([this.sb.from(tabP).select('id,dati').order('id'),this.sb.from('mesi').select('chiave,dati,rev,agg')])}
+    try{[p,m]=await Promise.all([this.sb.from('persone').select('id,dati').order('id'),this.sb.from('mesi').select('chiave,dati,rev,agg')])}
     catch(e){p={error:e};m={}}
     const er=p.error||m.error;
     if(er&&erroreRete(er)&&this.daCache())return;
     if(er)throw new Error('Lettura dati non riuscita: '+er.message+' (lo script SQL è stato eseguito?)');
     ANAG.splice(0,ANAG.length,...p.data.map(r=>Object.assign({},r.dati,{id:r.id})));   /* prima l'anagrafica: normalizza() la usa */
-    if(!this.admin&&this.utente&&this.utente.personaId){
-      try{const o=await this.sb.from('persone').select('id,dati').eq('id',this.utente.personaId).maybeSingle();
-        if(o.data){const i=ANAG.findIndex(x=>x.id===o.data.id),n=Object.assign({},o.data.dati,{id:o.data.id});if(i<0)ANAG.push(n);else ANAG[i]=n}}catch(e){}
-    }
     for(const k of Object.keys(DATA))delete DATA[k];
     m.data.forEach(r=>{DATA[r.chiave]=normalizza(Object.assign({},r.dati,{rev:r.rev,agg:r.agg}))});
     this.offline=false;this.scriviCache();
@@ -76,6 +70,23 @@ const SupabaseAdapter={
     if(!data||!data.length)return{ok:false,errore:'permesso negato'};
     if(this.utente&&this.utente.id===id)this.utente.personaId=personaId;
     return{ok:true};
+  },
+  /* Registri (V00.10): {dati, rev, inviatoRev, inviatoIl, agg} oppure null se non ancora salvato */
+  async leggiRegistro(k,n,L,pid){
+    let r;
+    try{r=await this.sb.from('registri').select('dati,rev,inviato_rev,inviato_il,agg').eq('mese',k).eq('turno',n).eq('ruolo',L).eq('persona_id',pid).maybeSingle()}
+    catch(x){const e=new Error(x.message||String(x));e.rete=true;throw e}
+    if(r.error){const e=new Error(r.error.message);e.rete=erroreRete(r.error);throw e}
+    const d=r.data;return d?{dati:d.dati,rev:d.rev,inviatoRev:d.inviato_rev,inviatoIl:d.inviato_il,agg:d.agg}:null;
+  },
+  /* dati=null con invia=true: invia l'ultima revisione salvata. Ritorna {ok,rev,inviatoRev,inviatoIl} | {ok:false,conflitto,attuale} | {ok:false,errore,rete} */
+  async salvaRegistro(k,n,L,pid,dati,baseRev,invia=false,forza=false){
+    let r;
+    try{r=await this.sb.rpc('salva_registro',{p_mese:k,p_turno:n,p_ruolo:L,p_persona:pid,p_dati:dati,p_base_rev:baseRev===undefined?null:baseRev,p_invia:!!invia,p_forza:!!forza})}
+    catch(x){return{ok:false,errore:x.message||String(x),rete:true}}
+    if(r.error)return{ok:false,errore:r.error.message,rete:erroreRete(r.error)};
+    const d=r.data;if(!d.ok)return d;
+    return{ok:true,rev:d.rev,inviatoRev:d.inviato_rev,inviatoIl:d.inviato_il,agg:d.agg};
   },
   async salvaMese(k,mese,baseRev,opz={}){
     const c=clone(mese);delete c.baseRev;delete c.rev;delete c.agg;
