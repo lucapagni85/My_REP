@@ -8,6 +8,7 @@
      salvaMese(k, mese, baseRev, opz)    -> {ok, rev, agg} | {ok:false, conflitto:true, attuale} | {ok:false, errore}
      salvaPersona(p)                     -> {ok, id} | {ok:false, errore}   (p senza id = nuova persona: l'id lo assegna l'adattatore)
      importa(mesi, anagrafica) / esporta()
+     inviaMail(corpo) -> {ok,...}    (V00.12) avvisi via mail tramite la funzione server; il locale risponde {ok:false,nonDisponibile:true}. Facoltativi: mailAttive, elencoInvii()
      login(id, pwd) -> bool  (locale)  |  login(email, pwd) -> {ok, errore}  (remoti)   /   logout()
    Il resto dell'app legge solo da DATA e ANAG e non sa dove vengono salvati i dati. */
 const DATA={}, ANAG=[];
@@ -75,6 +76,7 @@ const LocalAdapter={
     try{localStorage.setItem(this.LSR,JSON.stringify(all))}catch(e){return{ok:false,errore:'memoria del browser non disponibile'}}
     return{ok:true,rev:r.rev,inviatoRev:r.inviatoRev,inviatoIl:r.inviatoIl,agg:r.agg};
   },
+  async inviaMail(){return{ok:false,nonDisponibile:true,errore:'le mail non sono disponibili con l’archivio locale'}},
   async importa(M,A){
     if(A&&Array.isArray(A.persone)){this.caricaAnag(A);this.scriviAnag()}   /* prima l'anagrafica: normalizza() la usa */
     for(const k in M)DATA[k]=normalizza(clone(M[k]));this.scrivi()

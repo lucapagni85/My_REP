@@ -179,3 +179,9 @@ nav.menu a[aria-current=page]{background:var(--petrol);border-color:var(--petrol
 .esito{background:var(--sage-l);border-left:5px solid var(--sage);border-radius:10px;padding:12px 16px}
 @media (max-width:760px){.rg-doc td.nom{width:auto}.rg-firme{grid-template-columns:1fr}}
 @media print{.passi,.rg-top,.rg-nav{display:none!important}}
+
+/* V00.12 · registro invii mail */
+.pill.err{background:var(--warm-l);border-color:#b3412f;color:#8a2f20}
+@media (prefers-color-scheme:dark){.pill.err{color:#f0a89a;border-color:#c9604d}}
+code{font:.85em ui-monospace,Menlo,Consolas,monospace;background:var(--bg);padding:1px 5px;border-radius:5px;border:1px solid var(--line)}
+.pill.err{white-space:nowrap}

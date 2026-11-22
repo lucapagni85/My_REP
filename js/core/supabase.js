@@ -4,7 +4,7 @@
 const erroreRete=e=>!navigator.onLine||/fetch|network|load failed/i.test((e&&e.message)||'');
 const SupabaseAdapter={
   nome:'Supabase (test)',richiedeLogin:true,utente:null,admin:false,sb:null,
-  offline:false,cacheTs:null,CK:'turni_cache_v1',
+  offline:false,cacheTs:null,CK:'turni_cache_v1',mailAttive:true,
   /* Copia locale: turni e recapiti essenziali (niente matricola, email, residenza). Si cancella all'uscita. */
   leggiCache(){try{return JSON.parse(localStorage.getItem(this.CK)||'null')}catch(e){return null}},
   scriviCache(){
@@ -87,6 +87,27 @@ const SupabaseAdapter={
     if(r.error)return{ok:false,errore:r.error.message,rete:erroreRete(r.error)};
     const d=r.data;if(!d.ok)return d;
     return{ok:true,rev:d.rev,inviatoRev:d.inviato_rev,inviatoIl:d.inviato_il,agg:d.agg};
+  },
+  /* Mail (V00.12): la funzione server «invia-mail» decide destinatari e testo dal database. Ritorna sempre un oggetto, mai eccezioni. */
+  async inviaMail(corpo){
+    let r;
+    try{r=await this.sb.functions.invoke('invia-mail',{body:corpo})}
+    catch(x){return{ok:false,errore:x.message||String(x),rete:true}}
+    if(r.error){
+      let msg=r.error.message||'errore sconosciuto',rete=false;const cx=r.error.context;
+      if(cx&&typeof cx.json==='function'){
+        if(cx.status===404)msg='la funzione «invia-mail» non è stata pubblicata su Supabase';
+        else{try{const j=await cx.json();if(j&&j.errore)msg=j.errore}catch(e){}}
+      }else if(/fetch|network|send a request|load failed/i.test(r.error.name+' '+msg)){rete=true;msg='connessione assente o funzione non raggiungibile'}
+      return{ok:false,errore:msg,rete};
+    }
+    return r.data&&typeof r.data==='object'?r.data:{ok:false,errore:'risposta vuota dalla funzione'};
+  },
+  /* Registro degli invii (solo admin): ultimi invii, senza il testo del messaggio. */
+  async elencoInvii(){
+    const{data,error}=await this.sb.from('invii_mail').select('id,creato,tipo,mese,turno,rev,destinatario,effettivo,nome_dest,oggetto,prova,esito,errore,reinvio_di').order('creato',{ascending:false}).limit(60);
+    if(error)throw new Error(error.message+(/does not exist|relation|schema cache/i.test(error.message)?' (lo script SQL V00.12 è stato eseguito?)':''));
+    return data||[];
   },
   async salvaMese(k,mese,baseRev,opz={}){
     const c=clone(mese);delete c.baseRev;delete c.rev;delete c.agg;

@@ -38,7 +38,7 @@ function contenitore(root){
     $('#menu').innerHTML=vis.map(s=>`<a href="#${s.id}"${s.id===id?' aria-current="page"':''}>${s.t}</a>`).join('');
     const el=$('#sez');
     if(id==='turni')Moduli.turni.monta(el,{tabs:['corso','archivio']});
-    else if(id==='amm')Moduli.turni.monta(el,{tabs:['genera','anagrafica','utenti']});
+    else if(id==='amm')Moduli.turni.monta(el,{tabs:['genera','anagrafica','utenti','mail']});
     else if(id==='help')Moduli.help.monta(el);
     else Moduli.ruoli.monta(el,SEZIONI.find(s=>s.id===id).l);
     window.scrollTo(0,0);

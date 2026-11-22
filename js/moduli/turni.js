@@ -125,7 +125,7 @@ const trova=t=>{const x=/^(.*) #(\d+)$/.exec(t);if(x)return anagId(+x[2]);return
 
 /* ===== GENERA TURNI ===== */
 const IDEAL={Z1:1,Z4:4,Z2:2,Z5:5,Z3:3,Z6:6}, SET={Z1:'Nord',Z4:'Nord',Z2:'Centro',Z5:'Centro',Z3:'Sud',Z6:'Sud'};
-let auth=false,gk=null,draft=null,gt=1,gv='turni',showAll=false,gmsg='',lerr='';
+let auth=false,gk=null,draft=null,gt=1,gv='turni',showAll=false,gmsg='',gwarn='',lerr='';
 /* Modello vuoto per il primo mese in assoluto (nessun dato reale nel codice). */
 const RECAPITI_VUOTI={fissi:['Recapito unico di chiamata','Protezione Civile H24 (solo emergenze)','118 Pisa-Livorno · chiusura strade'].map(e=>({etichetta:e,numero:''})),
   imprese:{ovest:['Zona 1 · Nord','Zona 2 · Centro','Zona 3 · Sud'].map(z=>({zona:z,nome:'',tel:''})),est:['Zona 4 · Nord','Zona 5 · Centro','Zona 6 · Sud'].map(z=>({zona:z,nome:'',tel:''})),comune:[{zona:'Sversamenti e sinistri',nome:'',tel:''}]}};
@@ -133,7 +133,7 @@ function nuovoMese(k){
   const ks=Object.keys(DATA).sort().filter(x=>x<k), pr=ks.length?DATA[ks[ks.length-1]]:null;
   return{turni:{1:{},2:{},3:{},4:{},5:{}},var:[],fissi:clone(pr?pr.fissi:RECAPITI_VUOTI.fissi),imprese:clone(pr?pr.imprese:RECAPITI_VUOTI.imprese),schema:1};
 }
-function apri(k){gk=k;draft=DATA[k]?clone(DATA[k]):nuovoMese(k);draft.baseRev=DATA[k]&&DATA[k].rev!==undefined?DATA[k].rev:null;if(!draft.turni[gt])draft.turni[gt]={};gmsg=DATA[k]?'':Object.keys(DATA).some(x=>x<k)?'Nuovo mese: recapiti e imprese ripresi dal mese precedente.':'Nuovo mese: compila recapiti e imprese nella scheda dedicata.'}
+function apri(k){gwarn='';gk=k;draft=DATA[k]?clone(DATA[k]):nuovoMese(k);draft.baseRev=DATA[k]&&DATA[k].rev!==undefined?DATA[k].rev:null;if(!draft.turni[gt])draft.turni[gt]={};gmsg=DATA[k]?'':Object.keys(DATA).some(x=>x<k)?'Nuovo mese: recapiti e imprese ripresi dal mese precedente.':'Nuovo mese: compila recapiti e imprese nella scheda dedicata.'}
 const usati=()=>{const u=new Set();for(const t of Object.values(draft.turni))for(const s of Object.values(t))u.add(chiave(s));return u};
 function vicini(){
   const y=+gk.slice(0,4),m=+gk.slice(5),pk=m===1?`${y-1}-12`:`${y}-${pad(m-1)}`,nk=m===12?`${y+1}-01`:`${y}-${pad(m+1)}`;
@@ -181,6 +181,26 @@ function viewVar(n,t){
    <datalist id="dlAll">${ANAG.filter(a=>a.attivo!==false).map(a=>`<option value="${esc(etich(a))}"></option>`).join('')}</datalist>
    <button class="go" id="va" style="margin-top:10px">Aggiungi variazione</button> <small style="color:var(--muted)">Per uno scambio inserisci due sostituzioni.</small></div>`;
 }
+/* Riepilogo delle differenze tra la versione salvata e quella nuova (V00.12): testo per la mail «turno aggiornato». */
+function variazioniMese(vec,nu){
+  const out=[],lab=k=>SLOTS[k][0]==='Addetto'?'Addetto '+(SLOTS[k][1].split(' · ')[1]||''):SLOTS[k][0];
+  if(!vec||!nu)return out;
+  for(let n=1;n<=5;n++)for(const k of ORDER){
+    const o=(vec.turni[n]||{})[k],w=(nu.turni[n]||{})[k];
+    if(!o&&!w)continue;
+    if(!o)out.push(`Turno ${n} · ${lab(k)}: ${w.n}`);
+    else if(!w)out.push(`Turno ${n} · ${lab(k)}: ${o.n} non più previsto`);
+    else if(chiave(o)!==chiave(w))out.push(`Turno ${n} · ${lab(k)}: ${w.n} al posto di ${o.n}`);
+  }
+  const kv=v=>JSON.stringify([v.turno,v.slot,v.t,v.giorno||'',v.entra||'',v.da||'',v.testo||'']);
+  const desc=(v,m)=>{try{return descVar(v,m.turni[v.turno])}catch(e){return null}};
+  const ov=new Set((vec.var||[]).map(kv)),nv=new Set((nu.var||[]).map(kv));
+  (nu.var||[]).filter(v=>!ov.has(kv(v))).forEach(v=>{const d=desc(v,nu);if(d)out.push(`Turno ${v.turno}: ${d}`)});
+  (vec.var||[]).filter(v=>!nv.has(kv(v))).forEach(v=>{const d=desc(v,vec);if(d)out.push(`Turno ${v.turno}: annullata la variazione «${d}»`)});
+  if(JSON.stringify(vec.fissi)!==JSON.stringify(nu.fissi))out.push('Recapiti di riferimento aggiornati');
+  if(JSON.stringify(vec.imprese)!==JSON.stringify(nu.imprese))out.push('Imprese di pronto intervento aggiornate');
+  return out;
+}
 const statoSalv=()=>{const d=DATA[gk];return !d?'Mese non ancora salvato':d.rev===undefined?'Salvato (dati di prova)':`Ultima versione salvata: rev ${pad(d.rev)} del ${it(new Date(d.agg))}`};
 function viewLogin(){
   if(Store.richiedeLogin)return `<div class="panel login"><h2>Sezione riservata</h2><p style="margin:0;color:var(--muted)">Solo gli amministratori possono modificare turni e anagrafica. Il tuo profilo (${esc(Store.utente?Store.utente.email:'')}) è in sola lettura.</p></div>`;
@@ -218,8 +238,8 @@ function viewGenera(){
     <button class="ghost" id="ex">Esporta backup</button><label style="display:inline-block;border:1px solid var(--line);border-radius:8px;padding:8px 12px;cursor:pointer;color:var(--ink);font-size:1rem">Importa backup<input type="file" id="im" accept=".json,application/json" hidden></label><button class="ghost" id="lo">Esci</button></div>
     <p style="margin:0 0 12px;color:var(--muted);font-size:.85rem">Archivio: ${Store.nome}. Esporta un backup periodicamente.</p>
     <div class="gt">${tabs}</div>${body}
-    <div class="tool" style="margin-top:20px"><button class="go" id="sv">Salva nell’archivio</button><button class="ghost" id="ar">Apri archivio / PDF</button>
-    <span class="ok">${esc(gmsg)}</span><small style="color:var(--muted)">${esc(statoSalv())}</small></div></div>`;
+    <div class="tool" style="margin-top:20px"><button class="go" id="sv">Salva nell’archivio</button>${Store.mailAttive?'<button class="go" id="sa" title="Salva il mese e manda una mail a tutte le utenze">Salva e avvisa</button>':''}<button class="ghost" id="ar">Apri archivio / PDF</button>
+    <span class="ok">${esc(gmsg)}</span>${gwarn?`<span class="err">${esc(gwarn)}</span>`:''}<small style="color:var(--muted)">${esc(statoSalv())}</small></div></div>`;
 }
 function bindLogin(){
   if(!$('#lg'))return;
@@ -256,13 +276,31 @@ function bindGenera(){
     draft.var.push(x);gmsg='';render()};
   const al=$('#all');if(al)al.onchange=()=>{showAll=al.checked;render()};
   v.querySelectorAll('input[data-g]').forEach(i=>i.oninput=()=>{const g=i.dataset.g==='fissi'?draft.fissi:draft.imprese[i.dataset.g];g[+i.dataset.j][i.dataset.c]=i.value;gmsg=''});
-  $('#sv').onclick=async()=>{
-    let r=await Store.salvaMese(gk,draft,draft.baseRev);
-    if(r.conflitto&&confirm(`Questo mese è stato modificato da un altro utente (rev ${pad(r.attuale)}) dopo l’apertura. Sovrascrivere comunque?`))r=await Store.salvaMese(gk,draft,draft.baseRev,{forza:true});
-    if(r.ok){draft.rev=r.rev;draft.agg=r.agg;draft.baseRev=r.rev;gmsg=`Salvato (${Store.nome}) · rev ${pad(r.rev)}`}
-    else gmsg=r.conflitto?'Salvataggio annullato: mese modificato da altri':'Errore di salvataggio: '+(r.errore||'');
+  $('#sv').onclick=async()=>{gwarn='';await salvaMeseCorrente();render()};
+  const sa=$('#sa');if(sa)sa.onclick=async()=>{
+    const vecchio=DATA[gk]?clone(DATA[gk]):null,vv=variazioniMese(vecchio,draft);gwarn='';
+    let n=null;try{if(Store.elencoUtenti)n=(await Store.elencoUtenti()).filter(u=>u.email).length}catch(e){}
+    const dest=n===null?'tutte le utenze':`${n} utenze`;
+    const corpo=vv.length?vv.slice(0,12).map(x=>'• '+x).join('\n')+(vv.length>12?`\n… e altre ${vv.length-12} variazioni`:''):vecchio?'Nessuna variazione rispetto all’ultima versione salvata.':'Primo salvataggio del mese: verrà inviato il riepilogo dei turni.';
+    if(!confirm(`Salvare il mese e avvisare via mail ${dest}?\n\n${corpo}`))return;
+    sa.disabled=true;
+    const r=await salvaMeseCorrente();
+    if(r.ok){
+      gmsg+=' · invio avviso…';render();
+      const e=Mail.esito(await Store.inviaMail({azione:'turno',mese:gk,variazioni:vv}));
+      gmsg=`Salvato (${Store.nome}) · rev ${pad(r.rev)}`;
+      if(e&&e.ok)gmsg+=' · '+e.t;else if(e)gwarn=e.t;
+    }
     render()};
   $('#ar').onclick=()=>{meseSel=gk;tab='archivio';document.querySelectorAll('nav.tabs button').forEach(x=>x.setAttribute('aria-selected',x.dataset.v==='archivio'));render()};
+}
+/* Salva il mese in lavorazione con controllo di revisione; imposta gmsg. Ritorna il risultato dell'archivio. */
+async function salvaMeseCorrente(){
+  let r=await Store.salvaMese(gk,draft,draft.baseRev);
+  if(r.conflitto&&confirm(`Questo mese è stato modificato da un altro utente (rev ${pad(r.attuale)}) dopo l’apertura. Sovrascrivere comunque?`))r=await Store.salvaMese(gk,draft,draft.baseRev,{forza:true});
+  if(r.ok){draft.rev=r.rev;draft.agg=r.agg;draft.baseRev=r.rev;gmsg=`Salvato (${Store.nome}) · rev ${pad(r.rev)}`}
+  else gmsg=r.conflitto?'Salvataggio annullato: mese modificato da altri':'Errore di salvataggio: '+(r.errore||'');
+  return r;
 }
 const gkNew=k=>{DATA[k]=undefined;delete DATA[k];return true};
 
@@ -283,6 +321,8 @@ function render(){
     v.innerHTML=viewAnagrafica();bindAnagrafica();
   } else if(tab==='utenti'){
     v.innerHTML=viewUtenti();bindUtenti();
+  } else if(tab==='mail'){
+    v.innerHTML=viewMail();bindMail();
   } else {
     v.innerHTML=viewGenera();bindGenera();
   }
@@ -298,8 +338,8 @@ function turnoAl(d){
     return{slot:k,profilo:SLOTS[k][0],area:s.area||SLOTS[k][1],id:p.id||null,nome:p.n,tel:(p.t||[]).filter(Boolean),titolare:tit,note};});
   return{mese:d.slice(0,7),turno:r.n,dal:iso(r.a),al:iso(r.b),rev:mese.rev===undefined?null:mese.rev,righe};
 }
-const TABS={corso:'Turno in corso',archivio:'Archivio turni',genera:'Genera turni',anagrafica:'Anagrafica',utenti:'Utenti'};
-/* opz.tabs: quali schede mostrare (Turni: corso, archivio; Amministrazione: genera, anagrafica, utenti) */
+const TABS={corso:'Turno in corso',archivio:'Archivio turni',genera:'Genera turni',anagrafica:'Anagrafica',utenti:'Utenti',mail:'Mail'};
+/* opz.tabs: quali schede mostrare (Turni: corso, archivio; Amministrazione: genera, anagrafica, utenti, mail) */
 function montaTurni(root,opz={}){
   if(Store.richiedeLogin)auth=!!Store.admin;          /* con login reale: modifica solo per gli admin */
   const tabs=opz.tabs||['corso','archivio'];

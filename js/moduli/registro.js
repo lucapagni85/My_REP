@@ -71,7 +71,17 @@ async function rgSalva(invia,forza,rerender){
     s.msg=invia?`Registro salvato e inviato (revisione ${pad(r.rev)}).`:`Registro salvato (revisione ${pad(r.rev)}).`;
   }else if(r.conflitto){s.conflitto=true;s.attuale=r.attuale}
   else s.err=r.rete?'Senza connessione: le modifiche restano sul dispositivo come bozza. Riprova quando torna la rete.':'Salvataggio non riuscito: '+(r.errore||'errore sconosciuto');
+  if(r.ok&&invia){s.mailRes=null;s.mailInCorso=!!Store.mailAttive}
   rerender();
+  if(r.ok&&invia)await rgAvvisa(rerender);                    /* l'invio è già avvenuto: un errore di mail non lo annulla */
+}
+/* Avviso mail al coordinatore (V00.12): la funzione server sceglie destinatari e testo dal database. */
+async function rgAvvisa(rerender){
+  const s=RG.s,c=RG.ctx,key=RG.key;if(!s||!Store.mailAttive||!Store.inviaMail)return;
+  s.mailInCorso=true;s.mailRes=null;rerender();
+  let r;try{r=await Store.inviaMail({azione:'registro',mese:c.k,turno:c.n,ruolo:c.L,persona_id:c.p.id})}catch(e){r={ok:false,errore:e.message||String(e)}}
+  if(RG.key!==key)return;
+  s.mailInCorso=false;s.mailRes=Mail.esito(r);rerender();
 }
 const rgVerifiche=()=>verificaRegistro(RG.ctx.L,{righe:RG.s.dati.righe,a:RG.ctx.a,b:RG.ctx.b});
 
@@ -129,6 +139,7 @@ RG.onClick=async function(b,rerender){
     const testo=av.length?`Ci sono ${av.length} avvisi nelle verifiche (non bloccanti). Inviare comunque il registro al coordinatore?`:'Inviare il registro al coordinatore?';
     if(!confirm(testo))return;await rgSalva(true,false,rerender);return;
   }
+  if(a==='avvisa'){await rgAvvisa(rerender);return}
   if(a==='sovrascrivi'){await rgSalva(false,true,rerender);return}
   if(a==='ricarica'){rgBozzaSalva(RG.key,null);const c0=RG.ctx;RG.reset();rgApri(c0,rerender);return}
   if(a==='ripristina'){s.dati=rgSistema(s.bozza.dati);s.bozza=null;rgModif();rerender();return}
@@ -161,6 +172,8 @@ function rgBanner(){
   if(s.conflitto)o.push(`<div class="alerts"><h3>Registro modificato altrove</h3>Nel database c’è una versione diversa dalla tua${s.attuale!==null&&s.attuale!==undefined?` (revisione ${pad(s.attuale)})`:''}. <button class="mini" data-rg="sovrascrivi">Sovrascrivi con la mia versione</button><button class="mini" data-rg="ricarica">Ricarica dal database</button></div>`);
   if(s.bozza)o.push(`<div class="alerts"><h3>Modifiche non salvate</h3>Su questo dispositivo c’è una bozza del ${esc(new Date(s.bozza.ts).toLocaleString('it-IT'))}. <button class="mini" data-rg="ripristina">Ripristina</button><button class="mini" data-rg="scarta">Scarta</button></div>`);
   if(s.err)o.push(`<div class="alerts"><h3>Attenzione</h3>${esc(s.err)}</div>`);
+  if(s.mailInCorso)o.push('<p class="ok" style="margin:0 0 10px">Invio dell’avviso mail al coordinatore…</p>');
+  else if(s.mailRes)o.push(s.mailRes.ok?`<p class="ok" style="margin:0 0 10px">${esc(s.mailRes.t)}</p>`:`<div class="alerts"><h3>Il registro è inviato, ma l’avviso mail no</h3>${esc(s.mailRes.t)} <button class="mini" data-rg="avvisa">Riprova l’avviso</button></div>`);
   if(s.msg)o.push(`<p class="ok" style="margin:0 0 10px">${esc(s.msg)}</p>`);
   return o.join('');
 }
@@ -221,7 +234,7 @@ function rgViewVerifica(){
         <div class="box"><span>Stato</span><b id="rgStatoB">${rgStatoTesto()}</b></div></div>
       ${ed?`<div class="tool" style="margin-top:14px"><button class="ghost" data-rg="salva">Salva</button><button class="go" data-rg="invia">Salva e invia al coordinatore</button></div>`:''}
       <div class="tool" style="margin-top:6px"><button class="ghost" data-rg="pdf">Scarica PDF</button><span style="color:var(--muted);font-size:.85rem">Si apre la stampa del browser: scegli «Salva come PDF». Il file riporta l’ultima revisione salvata.</span></div>
-      <p style="color:var(--muted);font-size:.85rem;margin:6px 0 0">L’invio rende il registro disponibile al coordinatore nel database. Excel e mail di promemoria arriveranno nelle prossime versioni.</p></div>${rgNav(4)}`;
+      <p style="color:var(--muted);font-size:.85rem;margin:6px 0 0">L’invio rende il registro disponibile al coordinatore nel database e gli manda una mail di avviso. L’Excel arriverà nella prossima versione.</p></div>${rgNav(4)}`;
 }
 RG.view=function(passo,c){
   if(!c.p)return `<div class="soon" style="padding:24px 10px">${rlPuoSimulare()?'Scegli una persona dall’anteprima per vedere il suo registro.':'Il tuo account non è collegato a una persona dell’anagrafica.'}</div>`;
