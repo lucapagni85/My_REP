@@ -116,6 +116,14 @@ RG.onClick=async function(b,rerender){
   if(a==='ordina'){s.dati.righe.sort((p,q)=>(p.data+(p.ora||'')).localeCompare(q.data+(q.ora||'')));rgModif();rerender();return}
   if(a==='resetOre'){if(!confirm('Ripristinare i valori calcolati automaticamente nel riepilogo?'))return;s.dati.ov={};rgModif();rerender();return}
   if(a==='salva'){await rgSalva(false,false,rerender);return}
+  if(a==='pdf'){
+    if(!c.sola&&(s.dirty||s.rev===null)){
+      if(!confirm('Il PDF riporta l’ultima revisione salvata. Salvare ora le modifiche?'))return;
+      await rgSalva(false,false,rerender);if(RG.s.dirty||RG.s.rev===null)return;
+    }
+    if(RG.s.rev===null){alert('Il registro non è ancora stato salvato: non c’è una revisione da stampare.');return}
+    rgPdf();return;
+  }
   if(a==='invia'){
     const av=rgVerifiche();
     const testo=av.length?`Ci sono ${av.length} avvisi nelle verifiche (non bloccanti). Inviare comunque il registro al coordinatore?`:'Inviare il registro al coordinatore?';
@@ -126,6 +134,21 @@ RG.onClick=async function(b,rerender){
   if(a==='ripristina'){s.dati=rgSistema(s.bozza.dati);s.bozza=null;rgModif();rerender();return}
   if(a==='scarta'){rgBozzaSalva(RG.key,null);s.bozza=null;rerender();return}
 };
+
+/* ---------- PDF (grafica V05.20, vedi core/stampa.js) ---------- */
+function rgDatiStampa(){
+  const c=RG.ctx,s=RG.s,eff=rgEff(),[y,m]=c.k.split('-').map(Number);
+  const rows=k=>eff.filter(x=>x.inc).map(x=>[it(parse(x.g)),Math.round(x[k]*60)]);   /* ore → minuti interi */
+  const tot=k=>rows(k).reduce((t,r)=>t+r[1],0);
+  return{D:{anno:y,mese:m,rev:s.rev},nome:c.p.n,persona:c.p,
+    coordinatore:c.tt&&c.tt.COO?c.tt.COO.n:'',supervisore:c.tt&&c.tt.SUP?c.tt.SUP.n:'',da:it(c.a),a:it(c.b),
+    righe:s.dati.righe.map((r,i)=>[String(i+1),r.data?it(parse(r.data)):'',r.ora||'',r.rich||'',r.via||'',r.km||'',r.motivo||'',r.arrivo||'',r.descr||'',r.fine||'',r.durata||'',r.note||'']),
+    rep:{rows:rows('rep'),tot:tot('rep')},str:{rows:rows('str'),tot:tot('str')}};
+}
+function rgPdf(){
+  const c=RG.ctx,o=rgDatiStampa();
+  Stampa.stampa(Stampa.addetto(o),Stampa.nomeFile('A',{k:c.k,n:c.n,a:c.a,b:c.b,nome:c.p.n,persona:c.p,rev:RG.s.rev}));
+}
 
 /* ---------- viste ---------- */
 function rgTop(){
@@ -197,7 +220,8 @@ function rgViewVerifica(){
       <div class="grid2"><div class="box"><span>Destinatario</span><b>${coo?`Coordinatore del turno: ${esc(coo)}`:'Coordinatore del turno'}</b></div>
         <div class="box"><span>Stato</span><b id="rgStatoB">${rgStatoTesto()}</b></div></div>
       ${ed?`<div class="tool" style="margin-top:14px"><button class="ghost" data-rg="salva">Salva</button><button class="go" data-rg="invia">Salva e invia al coordinatore</button></div>`:''}
-      <p style="color:var(--muted);font-size:.85rem;margin:6px 0 0">L’invio rende il registro disponibile al coordinatore nel database. PDF, Excel e mail di promemoria arriveranno nella prossima versione.</p></div>${rgNav(4)}`;
+      <div class="tool" style="margin-top:6px"><button class="ghost" data-rg="pdf">Scarica PDF</button><span style="color:var(--muted);font-size:.85rem">Si apre la stampa del browser: scegli «Salva come PDF». Il file riporta l’ultima revisione salvata.</span></div>
+      <p style="color:var(--muted);font-size:.85rem;margin:6px 0 0">L’invio rende il registro disponibile al coordinatore nel database. Excel e mail di promemoria arriveranno nelle prossime versioni.</p></div>${rgNav(4)}`;
 }
 RG.view=function(passo,c){
   if(!c.p)return `<div class="soon" style="padding:24px 10px">${rlPuoSimulare()?'Scegli una persona dall’anteprima per vedere il suo registro.':'Il tuo account non è collegato a una persona dell’anagrafica.'}</div>`;
