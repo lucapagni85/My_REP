@@ -1,8 +1,13 @@
-/* REGISTRO, RIEPILOGO e VERIFICHE dell'ADDETTO (V00.10).
-   Passi della scheda: 1 Turno (ruoli.js) · 2 Registro · 3 Riepilogo · 4 Verifiche e invio.
+/* REGISTRO, RIEPILOGO e VERIFICHE dell'ADDETTO (V00.10) e del COORDINATORE (V00.13).
+   Passi della scheda Addetto: 1 Turno (ruoli.js) · 2 Registro · 3 Riepilogo · 4 Verifiche e invio.
+   Passi della scheda Coordinatore: 1 Turno · 2 Registro · 3 Riepilogo · 4 Addetti (registri inviati e «visto») · 5 Verifiche e invio.
    Dati nel database (Store.leggiRegistro / salvaRegistro) con numero di revisione; le modifiche non salvate
    si conservano anche sul dispositivo (bozza) e si possono ripristinare. Le verifiche non sono bloccanti. */
-const RG={key:null,ctx:null,s:null};
+const RG={key:null,ctx:null,s:null,ad:null};
+const RG_PASSI={A:['Turno','Registro','Riepilogo','Verifiche e invio'],C:['Turno','Registro','Riepilogo','Addetti','Verifiche e invio']};
+const RG_DEST={A:'coordinatore',C:'supervisore'};      /* a chi va l'invio (e il «visto» arriva da chi sta sopra) */
+const RG_VISTO_DA={A:'coordinatore',C:'supervisore'};
+const rgNomePasso=(L,p)=>(RG_PASSI[L]||RG_PASSI.A)[p-1];
 const RG_BOZZE='turni_bozze_v1';
 let rgTimer=null;
 
@@ -10,7 +15,16 @@ const rgK=c=>`${c.k}|${c.n}|${c.L}|${c.p.id}`;
 const rgBozze=()=>{try{return JSON.parse(localStorage.getItem(RG_BOZZE)||'{}')}catch(e){return{}}};
 function rgBozzaSalva(key,v){try{const b=rgBozze();if(v)b[key]=v;else delete b[key];localStorage.setItem(RG_BOZZE,JSON.stringify(b))}catch(e){}}
 const rgVuoto=()=>({v:1,righe:[],ov:{}});
-const rgRiga=data=>({data,ora:'',rich:'',via:'',km:'',motivo:'',arrivo:'',fine:'',durata:'',durAuto:true,descr:'',note:''});
+const rgRiga=(data,L)=>Object.assign({data,ora:'',rich:'',via:'',km:'',motivo:'',arrivo:'',fine:'',durata:'',durAuto:true,descr:'',note:''},
+  L==='C'?{tipo:'',addetti:[],addettiAltri:'',imprese:'',sopr:'',soprSup:'',effic:''}:{});
+const rgDmy=t=>{const d=new Date(t);return isNaN(d)?'':it(d)};
+/* Addetti del turno (titolari e sostituti, vice coordinatore compreso) esclusa la persona che compila. */
+function rgAddettiTurno(c){
+  const o=[],visti=new Set(),tt=c.tt||{},add=(id,n)=>{const k=id?'i'+id:'n'+n;if(visti.has(k))return;visti.add(k);o.push({id:id||null,n})};
+  for(const sl of ['VICE','Z1','Z2','Z3','Z4','Z5','Z6'])if(tt[sl])add(tt[sl].id,tt[sl].n);
+  for(const v of (c.m&&c.m.var)||[])if(v.turno===c.n&&v.t==='sost'&&v.slot!=='SUP'&&v.slot!=='COO'&&tt[v.slot])add(v.entraId,v.entra);
+  return o.filter(x=>!(c.p&&(x.id?x.id===c.p.id:x.n===c.p.n)));
+}
 function rgDataDefault(c,righe){
   const oggi=iso(new Date());
   return (righe.length&&righe[righe.length-1].data)||(oggi>=iso(c.a)&&oggi<=iso(c.b)?oggi:iso(c.a));
@@ -19,7 +33,7 @@ const rgSistema=d=>{d=d&&typeof d==='object'?d:{};d.righe=Array.isArray(d.righe)
 
 /* ---------- caricamento ---------- */
 async function rgApri(c,rerender){
-  const key=rgK(c),s={stato:'cic',dati:rgVuoto(),baseRev:null,rev:null,inviatoRev:null,inviatoIl:null,dirty:false,msg:'',err:'',bozza:null,conflitto:false,attuale:null,salvando:false};
+  const key=rgK(c),s={stato:'cic',dati:rgVuoto(),baseRev:null,rev:null,inviatoRev:null,inviatoIl:null,vistoRev:null,vistoIl:null,dirty:false,msg:'',err:'',bozza:null,conflitto:false,attuale:null,salvando:false};
   RG.key=key;RG.ctx=c;RG.s=s;
   let db=null,rete=false,errore='';
   try{db=await Store.leggiRegistro(c.k,c.n,c.L,c.p.id)}catch(e){rete=!!e.rete||!navigator.onLine;errore=e.message||String(e)}
@@ -30,16 +44,21 @@ async function rgApri(c,rerender){
     else{s.stato='err';s.err=rete?'Registro non raggiungibile: senza connessione si può aprire solo se c’è una bozza su questo dispositivo.':'Lettura del registro non riuscita: '+errore+' (lo script SQL V00.10 è stato eseguito?)'}
   }else{
     s.stato='ok';
-    if(db){s.dati=rgSistema(db.dati);s.baseRev=db.rev;s.rev=db.rev;s.inviatoRev=db.inviatoRev;s.inviatoIl=db.inviatoIl}
+    if(db){s.dati=rgSistema(db.dati);s.baseRev=db.rev;s.rev=db.rev;s.inviatoRev=db.inviatoRev;s.inviatoIl=db.inviatoIl;s.vistoRev=db.vistoRev===undefined?null:db.vistoRev;s.vistoIl=db.vistoIl||null}
     if(bz&&JSON.stringify(rgSistema(bz.dati))!==JSON.stringify(s.dati))s.bozza=bz;
     else if(bz)rgBozzaSalva(key,null);
   }
   rerender();
 }
-RG.assicura=function(c,rerender){if(c&&c.p&&RG.key!==rgK(c))rgApri(c,rerender)};
-RG.reset=function(){RG.key=null;RG.s=null;RG.ctx=null};
+RG.assicura=function(c,rerender,passo){
+  if(c&&c.p&&RG.key!==rgK(c))rgApri(c,rerender);
+  if(c&&c.p&&c.L==='C'&&rgNomePasso('C',passo)==='Addetti'&&(!RG.ad||RG.ad.key!==rgAdKey(c)))rgAdApri(c,rerender);
+};
+RG.reset=function(){RG.key=null;RG.s=null;RG.ctx=null;RG.ad=null};
 
 /* ---------- stato e salvataggio ---------- */
+/* Il visto vale solo per la revisione inviata: se ne viene inviata un'altra, decade. */
+const rgVistoValido=()=>{const s=RG.s;return !!s&&s.vistoRev!==null&&s.vistoRev!==undefined&&s.vistoRev===s.inviatoRev&&!!s.vistoIl};
 function rgStatoTesto(){
   const s=RG.s;let t;
   if(s.rev===null)t='Non ancora salvato';
@@ -47,6 +66,8 @@ function rgStatoTesto(){
     t=`Revisione ${pad(s.rev)} salvata`;
     if(s.inviatoRev===null||s.inviatoRev===undefined)t+=' · non inviata';
     else t+=s.inviatoRev===s.rev&&!s.dirty?' · <b>inviata</b>':` · ultima inviata: rev ${pad(s.inviatoRev)}`;
+    if(rgVistoValido())t+=` · visto dal ${RG_VISTO_DA[RG.ctx.L]} il ${rgDmy(s.vistoIl)}`;
+    else if(s.vistoRev!==null&&s.vistoRev!==undefined)t+=' · visto decaduto (inviata una revisione nuova)';
   }
   return t+(s.dirty?' · <span class="mod">modifiche non salvate</span>':'');
 }
@@ -111,17 +132,21 @@ function rgSetOre(g,campo,v,el){
 }
 RG.onInput=function(e){
   const t=e.target,s=RG.s;if(!s||s.stato!=='ok'||RG.ctx.sola)return;
-  if(t.dataset.f!==undefined&&t.dataset.i!==undefined)rgSetRiga(+t.dataset.i,t.dataset.f,t.value);
+  if(t.dataset.f!==undefined&&t.dataset.i!==undefined&&t.type!=='checkbox')rgSetRiga(+t.dataset.i,t.dataset.f,t.value);
   else if(t.dataset.c==='rep'||t.dataset.c==='str')rgSetOre(t.dataset.g,t.dataset.c,t.value,t);
 };
 RG.onChange=function(e,rerender){
   const t=e.target,s=RG.s;if(!s||s.stato!=='ok'||RG.ctx.sola)return;
+  if(t.dataset.f==='addetto'&&t.dataset.i!==undefined){                  /* addetti coinvolti (coordinatore): elenco di {id,n} */
+    const r=s.dati.righe[+t.dataset.i];if(!r)return;const[id,...nn]=t.value.split('|'),n=nn.join('|'),x={id:id?+id:null,n};
+    r.addetti=(r.addetti||[]).filter(y=>!(x.id?y.id===x.id:y.n===x.n));if(t.checked)r.addetti.push(x);
+    rgModif();return}
   if(t.dataset.c==='inc'){const ov=s.dati.ov;ov[t.dataset.g]=Object.assign(ov[t.dataset.g]||{},{inc:t.checked});rgModif();rerender();return}
   if(t.dataset.c==='rep'||t.dataset.c==='str'){const x=rgEff().find(y=>y.g===t.dataset.g);if(x)t.value=fmtOre(x[t.dataset.c])}   /* normalizza il formato */
 };
 RG.onClick=async function(b,rerender){
   const a=b.dataset.rg,s=RG.s,c=RG.ctx;if(!s)return;
-  if(a==='add'){s.dati.righe.push(rgRiga(rgDataDefault(c,s.dati.righe)));rgModif();rerender();return}
+  if(a==='add'){s.dati.righe.push(rgRiga(rgDataDefault(c,s.dati.righe),c.L));rgModif();rerender();return}
   if(a==='del'){const i=+b.dataset.i;if(!confirm(`Eliminare l’evento n° ${i+1}?`))return;s.dati.righe.splice(i,1);rgModif();rerender();return}
   if(a==='ordina'){s.dati.righe.sort((p,q)=>(p.data+(p.ora||'')).localeCompare(q.data+(q.ora||'')));rgModif();rerender();return}
   if(a==='resetOre'){if(!confirm('Ripristinare i valori calcolati automaticamente nel riepilogo?'))return;s.dati.ov={};rgModif();rerender();return}
@@ -136,10 +161,13 @@ RG.onClick=async function(b,rerender){
   }
   if(a==='invia'){
     const av=rgVerifiche();
-    const testo=av.length?`Ci sono ${av.length} avvisi nelle verifiche (non bloccanti). Inviare comunque il registro al coordinatore?`:'Inviare il registro al coordinatore?';
+    const dest=RG_DEST[c.L],testo=av.length?`Ci sono ${av.length} avvisi nelle verifiche (non bloccanti). Inviare comunque il registro al ${dest}?`:`Inviare il registro al ${dest}?`;
     if(!confirm(testo))return;await rgSalva(true,false,rerender);return;
   }
   if(a==='avvisa'){await rgAvvisa(rerender);return}
+  if(a==='adApri'){const a0=RG.ad;if(a0)a0.aperto=a0.aperto===+b.dataset.id?null:+b.dataset.id;rerender();return}
+  if(a==='adVisto'||a==='adTogli'){await rgAdVisto(+b.dataset.id,a==='adTogli',rerender);return}
+  if(a==='adRicarica'){RG.ad=null;await rgAdApri(c,rerender);return}
   if(a==='sovrascrivi'){await rgSalva(false,true,rerender);return}
   if(a==='ricarica'){rgBozzaSalva(RG.key,null);const c0=RG.ctx;RG.reset();rgApri(c0,rerender);return}
   if(a==='ripristina'){s.dati=rgSistema(s.bozza.dati);s.bozza=null;rgModif();rerender();return}
@@ -148,17 +176,21 @@ RG.onClick=async function(b,rerender){
 
 /* ---------- PDF (grafica V05.20, vedi core/stampa.js) ---------- */
 function rgDatiStampa(){
-  const c=RG.ctx,s=RG.s,eff=rgEff(),[y,m]=c.k.split('-').map(Number);
+  const c=RG.ctx,s=RG.s,eff=rgEff(),[y,m]=c.k.split('-').map(Number),vv=rgVistoValido()?rgDmy(s.vistoIl):'';
   const rows=k=>eff.filter(x=>x.inc).map(x=>[it(parse(x.g)),Math.round(x[k]*60)]);   /* ore → minuti interi */
   const tot=k=>rows(k).reduce((t,r)=>t+r[1],0);
   return{D:{anno:y,mese:m,rev:s.rev},nome:c.p.n,persona:c.p,
     coordinatore:c.tt&&c.tt.COO?c.tt.COO.n:'',supervisore:c.tt&&c.tt.SUP?c.tt.SUP.n:'',da:it(c.a),a:it(c.b),
-    righe:s.dati.righe.map((r,i)=>[String(i+1),r.data?it(parse(r.data)):'',r.ora||'',r.rich||'',r.via||'',r.km||'',r.motivo||'',r.arrivo||'',r.descr||'',r.fine||'',r.durata||'',r.note||'']),
-    rep:{rows:rows('rep'),tot:tot('rep')},str:{rows:rows('str'),tot:tot('str')}};
+    righe:s.dati.righe.map((r,i)=>c.L==='C'
+      ?[String(i+1),r.data?it(parse(r.data)):'',r.ora||'',r.rich||'',r.via||'',r.km||'',r.motivo||'',r.tipo||'',rgAddettiTesto(r),r.arrivo||'',r.fine||'',r.imprese||'',r.sopr||'',r.soprSup||'',r.effic||'',r.durata||'',r.note||'']
+      :[String(i+1),r.data?it(parse(r.data)):'',r.ora||'',r.rich||'',r.via||'',r.km||'',r.motivo||'',r.arrivo||'',r.descr||'',r.fine||'',r.durata||'',r.note||'']),
+    rep:{rows:rows('rep'),tot:tot('rep')},str:{rows:rows('str'),tot:tot('str')},
+    ...(c.L==='C'?{vistoS:vv}:{vistoC:vv})};
 }
+const rgAddettiTesto=r=>[...(r.addetti||[]).map(x=>x.n),...(r.addettiAltri&&r.addettiAltri.trim()?[r.addettiAltri.trim()]:[])].join(', ');
 function rgPdf(){
   const c=RG.ctx,o=rgDatiStampa();
-  Stampa.stampa(Stampa.addetto(o),Stampa.nomeFile('A',{k:c.k,n:c.n,a:c.a,b:c.b,nome:c.p.n,persona:c.p,rev:RG.s.rev}));
+  Stampa.stampa(c.L==='C'?Stampa.coordinatore(o):Stampa.addetto(o),Stampa.nomeFile(c.L,{k:c.k,n:c.n,a:c.a,b:c.b,nome:c.p.n,persona:c.p,rev:RG.s.rev}));
 }
 
 /* ---------- viste ---------- */
@@ -172,30 +204,43 @@ function rgBanner(){
   if(s.conflitto)o.push(`<div class="alerts"><h3>Registro modificato altrove</h3>Nel database c’è una versione diversa dalla tua${s.attuale!==null&&s.attuale!==undefined?` (revisione ${pad(s.attuale)})`:''}. <button class="mini" data-rg="sovrascrivi">Sovrascrivi con la mia versione</button><button class="mini" data-rg="ricarica">Ricarica dal database</button></div>`);
   if(s.bozza)o.push(`<div class="alerts"><h3>Modifiche non salvate</h3>Su questo dispositivo c’è una bozza del ${esc(new Date(s.bozza.ts).toLocaleString('it-IT'))}. <button class="mini" data-rg="ripristina">Ripristina</button><button class="mini" data-rg="scarta">Scarta</button></div>`);
   if(s.err)o.push(`<div class="alerts"><h3>Attenzione</h3>${esc(s.err)}</div>`);
-  if(s.mailInCorso)o.push('<p class="ok" style="margin:0 0 10px">Invio dell’avviso mail al coordinatore…</p>');
+  if(s.mailInCorso)o.push(`<p class="ok" style="margin:0 0 10px">Invio dell’avviso mail al ${RG_DEST[c.L]}…</p>`);
   else if(s.mailRes)o.push(s.mailRes.ok?`<p class="ok" style="margin:0 0 10px">${esc(s.mailRes.t)}</p>`:`<div class="alerts"><h3>Il registro è inviato, ma l’avviso mail no</h3>${esc(s.mailRes.t)} <button class="mini" data-rg="avvisa">Riprova l’avviso</button></div>`);
   if(s.msg)o.push(`<p class="ok" style="margin:0 0 10px">${esc(s.msg)}</p>`);
   return o.join('');
 }
-const rgNav=p=>`<div class="tool rg-nav">${p>2?`<button class="ghost" data-rg="passo" data-p="${p-1}">← Indietro</button>`:`<button class="ghost" data-rg="passo" data-p="1">← Turno</button>`}<span class="sp"></span>${p<4?`<button class="go" data-rg="passo" data-p="${p+1}">Avanti →</button>`:''}</div>`;
+const rgNav=p=>{const tot=RG_PASSI[RG.ctx.L].length;return `<div class="tool rg-nav">${p>2?`<button class="ghost" data-rg="passo" data-p="${p-1}">← Indietro</button>`:`<button class="ghost" data-rg="passo" data-p="1">← Turno</button>`}<span class="sp"></span>${p<tot?`<button class="go" data-rg="passo" data-p="${p+1}">Avanti →</button>`:''}</div>`};
 
-function rgCard(r,i,ed){
-  const d=ed?'':' disabled';
+function rgCard(r,i,ed,L,c){
+  const d=ed?'':' disabled',C=L==='C';
   const f=(k,lab,tipo='text',extra='')=>`<label>${lab}<input type="${tipo}" data-i="${i}" data-f="${k}" value="${esc(r[k]||'')}"${d} ${extra}></label>`;
   const ta=(k,lab)=>`<label class="rg-w">${lab}<textarea data-i="${i}" data-f="${k}" rows="2"${d}>${esc(r[k]||'')}</textarea></label>`;
-  return `<div class="rg-ev"><div class="rg-h"><b>Evento n° ${i+1}</b>${ed?`<button class="mini" data-rg="del" data-i="${i}">Elimina</button>`:''}</div>
-    <div class="rg-g">${f('data','Data','date')}${f('ora','Ora chiamata','time')}${f('rich','Soggetto richiedente')}${f('via','SP o SR','text','placeholder="es. SP 3"')}${f('km','Km','text','inputmode="decimal"')}
-      ${f('motivo','Motivo della chiamata')}${f('arrivo','Orario arrivo sul posto','time')}${f('fine','Ora fine intervento','time')}${f('durata','Durata complessiva (h:mm)','text','placeholder="h:mm" inputmode="numeric"')}
+  const sn=(k,lab)=>`<label>${lab}<select data-i="${i}" data-f="${k}"${d}><option value="">—</option>${['Sì','No'].map(v=>`<option${r[k]===v?' selected':''}>${v}</option>`).join('')}</select></label>`;
+  const top=`${f('data','Data','date')}${f('ora','Ora chiamata','time')}${f('rich','Soggetto richiedente')}${f('via','SP o SR','text','placeholder="es. SP 3"')}${f('km','Km','text','inputmode="decimal"')}${f('motivo','Motivo della chiamata')}`;
+  if(!C)return `<div class="rg-ev"><div class="rg-h"><b>Evento n° ${i+1}</b>${ed?`<button class="mini" data-rg="del" data-i="${i}">Elimina</button>`:''}</div>
+    <div class="rg-g">${top}${f('arrivo','Orario arrivo sul posto','time')}${f('fine','Ora fine intervento','time')}${f('durata','Durata complessiva (h:mm)','text','placeholder="h:mm" inputmode="numeric"')}
       ${ta('descr','Descrizione intervento effettuato')}${ta('note','Note')}</div></div>`;
+  const ad=rgAddettiTurno(c),sel=r.addetti||[];
+  const chips=ad.map(x=>{const v=(x.id||'')+'|'+x.n,on=sel.some(y=>x.id?y.id===x.id:y.n===x.n);
+    return `<label class="chk"><input type="checkbox" data-i="${i}" data-f="addetto" value="${esc(v)}"${on?' checked':''}${d}>${esc(x.n)}</label>`}).join('');
+  /* addetti già scelti ma non più nel turno: restano visibili (e deselezionabili) */
+  const fuori=sel.filter(y=>!ad.some(x=>x.id?y.id===x.id:y.n===x.n)).map(y=>`<label class="chk"><input type="checkbox" data-i="${i}" data-f="addetto" value="${esc((y.id||'')+'|'+y.n)}" checked${d}>${esc(y.n)}</label>`).join('');
+  return `<div class="rg-ev"><div class="rg-h"><b>Evento n° ${i+1}</b>${ed?`<button class="mini" data-rg="del" data-i="${i}">Elimina</button>`:''}</div>
+    <div class="rg-g">${top}${f('tipo','Tipologia intervento')}
+      <div class="rg-w"><span class="rg-l">Addetti coinvolti</span><div class="rg-chips">${chips||'<small style="color:var(--muted)">Nessun addetto nel turno</small>'}${fuori}</div>
+        <label style="margin-top:6px">Altri addetti attivati (testo libero)<input type="text" data-i="${i}" data-f="addettiAltri" value="${esc(r.addettiAltri||'')}"${d}></label></div>
+      ${f('arrivo','Orario arrivo sul posto (addetti o imprese)','time')}${f('fine','Orario chiusura intervento','time')}${f('imprese','Imprese coinvolte')}
+      ${sn('sopr','Sopralluogo diretto')}${sn('soprSup','Sopralluogo supervisore')}${f('effic','Efficacia intervento')}
+      ${f('durata','Impegno totale (diretto e/o da remoto) h:mm','text','placeholder="h:mm" inputmode="numeric"')}${ta('note','Note')}</div></div>`;
 }
 function rgViewRegistro(){
   const s=RG.s,c=RG.ctx,ed=!c.sola,iv=intervalli(s.dati.righe),tot=iv.reduce((x,v)=>x+v.dur,0);
   return `${rgTop()}${rgBanner()}
-    <div class="sec" style="margin-top:12px"><h3>Registro addetto</h3>
+    <div class="sec" style="margin-top:12px"><h3>${c.L==='C'?'Registro coordinatore':'Registro addetto'}</h3>
       <p class="rg-sub">Provincia di Pisa · settore viabilità<br>Turno di reperibilità dalle ore 00:00 del ${it(c.a)} alle ore 23:59 del ${it(c.b)}</p>
-      ${s.dati.righe.length?s.dati.righe.map((r,i)=>rgCard(r,i,ed)).join(''):`<p class="soon" style="padding:20px">Nessun intervento registrato.${ed?' Aggiungi un intervento quando serve: se non ce ne sono stati, puoi passare direttamente al riepilogo.':''}</p>`}
+      ${s.dati.righe.length?s.dati.righe.map((r,i)=>rgCard(r,i,ed,c.L,c)).join(''):`<p class="soon" style="padding:20px">Nessun intervento registrato.${ed?' Aggiungi un intervento quando serve: se non ce ne sono stati, puoi passare direttamente al riepilogo.':''}</p>`}
       <div class="tool">${ed?'<button class="go" data-rg="add">Aggiungi intervento</button><button class="ghost" data-rg="ordina">Ordina per data e ora</button>':''}<span class="sp"></span>
-        <span style="color:var(--muted);font-size:.9rem">Interventi: ${s.dati.righe.length} · durata totale ${fmtHM(tot)}</span></div></div>${rgNav(2)}`;
+        <span style="color:var(--muted);font-size:.9rem">Interventi: ${s.dati.righe.length} · ${c.L==='C'?'impegno totale':'durata totale'} ${fmtHM(tot)}</span></div></div>${rgNav(2)}`;
 }
 function rgViewRiepilogo(){
   const s=RG.s,c=RG.ctx,ed=!c.sola,eff=rgEff(),nm=nomeMese(c.k).split(' '),nome=(c.p.mat?c.p.mat+' ':'')+c.p.n;
@@ -210,36 +255,87 @@ function rgViewRiepilogo(){
       <p style="color:var(--muted);margin:0 0 12px;font-size:.9rem">Precompilato dal turno e dal registro. Puoi correggere le ore, oppure togliere un giorno (es. malattia o permesso) con la casella. I valori corretti a mano sono evidenziati.</p>
       <div class="rg-doc">
         <div class="rg-ente">Istituzione dei Comuni per il governo dell’area vasta<br><small>Scuole, Strade e Sistemi di trasporto, Territorio e Ambiente · Gestione associata di servizi e assistenza ai Comuni</small><br><b>SETTORE VIABILITA’, TRASPORTI E PROTEZIONE CIVILE</b></div>
-        <p class="rg-tit">MODELLO ADDETTO<br>SERVIZIO DI REPERIBILITA’ ORARIA SVOLTO NEL MESE DI ${esc(nm[0].toUpperCase())} ANNO ${esc(nm[1])}</p>
+        <p class="rg-tit">MODELLO ${c.L==='C'?'COORDINATORE':'ADDETTO'}<br>SERVIZIO DI REPERIBILITA’ ORARIA SVOLTO NEL MESE DI ${esc(nm[0].toUpperCase())} ANNO ${esc(nm[1])}</p>
         <p>Il sottoscritto dipendente <b>${esc(c.p.n)}</b> dichiara sotto la propria responsabilità di aver prestato il Servizio di Reperibilità nei giorni e per le ore sotto indicate.</p>
         <div class="tw"><table><thead><tr><th>Nominativo dipendente</th><th>Giorni</th><th>Ore</th></tr></thead><tbody>${r1}
           <tr class="tot"><td></td><td>TOTALE ORE</td><td class="num" id="rgTotRep">${fmtOre(totaleOre(eff,'rep'))}</td></tr></tbody></table></div>
         <p>Dichiara altresì di aver svolto il Servizio di Reperibilità per il quale è previsto il riconoscimento del lavoro straordinario nei giorni e per le ore sotto indicate.</p>
         <div class="tw"><table><thead><tr><th>Nominativo dipendente</th><th>Giorni</th><th>Ore</th></tr></thead><tbody>${r2h}
           <tr class="tot"><td></td><td>TOTALE ORE</td><td class="num" id="rgTotStr">${fmtOre(totaleOre(eff,'str'))}</td></tr></tbody></table></div>
-        <div class="rg-firme"><div>L’ADDETTO<br><b>${esc(c.p.n)}</b><span>Firma</span></div><div>Il Dirigente<br><b>${esc(CONFIG.dirigente||'')}</b><span>Firma</span></div></div>
+        <div class="rg-firme">${c.L==='C'?`<div>IL COORDINATORE<br><b>${esc(c.p.n)}</b><span>Firma</span></div><div>IL SUPERVISORE<br><b>${esc(c.tt&&c.tt.SUP?c.tt.SUP.n:'')}</b><span>Firma</span></div>`:`<div>L’ADDETTO<br><b>${esc(c.p.n)}</b><span>Firma</span></div><div>Il Dirigente<br><b>${esc(CONFIG.dirigente||'')}</b><span>Firma</span></div>`}</div>
       </div>
       ${ed&&ha?'<div class="tool" style="margin-top:12px"><button class="ghost" data-rg="resetOre">Ripristina i valori automatici</button></div>':''}</div>${rgNav(3)}`;
 }
 function rgViewVerifica(){
   const s=RG.s,c=RG.ctx,ed=!c.sola,av=rgVerifiche(),x=av.filter(a=>a.lv==='x'),l=av.filter(a=>a.lv==='l');
   const lista=(a,titolo,cls)=>a.length?`<div class="${cls}"><h3>${titolo} (${a.length})</h3><ul>${a.map(v=>`<li><b>Evento n° ${v.riga}</b>: ${esc(v.t)}</li>`).join('')}</ul></div>`:'';
-  const coo=c.tt&&c.tt.COO?c.tt.COO.n:null;
+  const C=c.L==='C',coo=(C?c.tt&&c.tt.SUP:c.tt&&c.tt.COO)?(C?c.tt.SUP.n:c.tt.COO.n):null,dest=RG_DEST[c.L];
   return `${rgTop()}${rgBanner()}
     <div class="sec" style="margin-top:12px"><h3>Verifiche</h3>
       <p style="color:var(--muted);margin:0 0 12px;font-size:.9rem">Le verifiche sono solo un aiuto: non bloccano il salvataggio né l’invio e non restano scritte nel report.</p>
       ${av.length?lista(x,'Anomalie','alerts')+lista(l,'Da verificare','alerts lieve'):`<div class="esito"><b>Nessuna anomalia rilevata.</b>${s.dati.righe.length?'':' Il registro non contiene interventi.'}</div>`}</div>
     <div class="sec"><h3>Invio</h3>
-      <div class="grid2"><div class="box"><span>Destinatario</span><b>${coo?`Coordinatore del turno: ${esc(coo)}`:'Coordinatore del turno'}</b></div>
+      <div class="grid2"><div class="box"><span>Destinatario</span><b>${coo?`${C?'Supervisore':'Coordinatore'} del turno: ${esc(coo)}`:`${C?'Supervisore':'Coordinatore'} del turno`}</b></div>
         <div class="box"><span>Stato</span><b id="rgStatoB">${rgStatoTesto()}</b></div></div>
-      ${ed?`<div class="tool" style="margin-top:14px"><button class="ghost" data-rg="salva">Salva</button><button class="go" data-rg="invia">Salva e invia al coordinatore</button></div>`:''}
+      ${ed?`<div class="tool" style="margin-top:14px"><button class="ghost" data-rg="salva">Salva</button><button class="go" data-rg="invia">Salva e invia al ${dest}</button></div>`:''}
       <div class="tool" style="margin-top:6px"><button class="ghost" data-rg="pdf">Scarica PDF</button><span style="color:var(--muted);font-size:.85rem">Si apre la stampa del browser: scegli «Salva come PDF». Il file riporta l’ultima revisione salvata.</span></div>
-      <p style="color:var(--muted);font-size:.85rem;margin:6px 0 0">L’invio rende il registro disponibile al coordinatore nel database e gli manda una mail di avviso. L’Excel arriverà nella prossima versione.</p></div>${rgNav(4)}`;
+      <p style="color:var(--muted);font-size:.85rem;margin:6px 0 0">L’invio rende il registro disponibile al ${dest} nel database e gli manda una mail di avviso.</p></div>${rgNav(RG_PASSI[c.L].length)}`;
+}
+/* ---------- Addetti del turno (scheda Coordinatore): registri inviati e «visto» ---------- */
+const rgAdKey=c=>`${c.k}|${c.n}|${c.p?c.p.id:''}`;
+async function rgAdApri(c,rerender){
+  const key=rgAdKey(c),ad={key,stato:'cic',lista:[],regs:{},err:'',aperto:null,msg:''};RG.ad=ad;
+  try{const regs=await Store.registriTurno(c.k,c.n,'A');for(const r of regs)ad.regs[r.personaId]=r;ad.stato='ok'}
+  catch(e){ad.stato='err';ad.err=e.message||String(e)}
+  if(!RG.ad||RG.ad.key!==key)return;
+  ad.lista=rgAddettiTurno(c);rerender();
+}
+async function rgAdVisto(pid,togli,rerender){
+  const c=RG.ctx,ad=RG.ad;if(!ad||c.sola)return;
+  const x=ad.lista.find(y=>y.id===pid);
+  if(!togli&&!confirm(`Mettere il visto sul registro di ${x?x.n:'questo addetto'}? Vale per la revisione inviata.`))return;
+  ad.msg='';const r=await Store.vistaRegistro(c.k,c.n,'A',pid,togli);
+  if(!RG.ad||RG.ad.key!==ad.key)return;
+  if(!r.ok)ad.msg='Operazione non riuscita: '+(r.errore||'errore sconosciuto');
+  else{const g=ad.regs[pid];if(g){g.vistoRev=r.vistoRev;g.vistoIl=r.vistoIl}ad.msg=togli?'Visto tolto.':'Visto registrato.'}
+  rerender();
+}
+function rgAdDettaglio(c,x,g){
+  const righe=g.dati&&g.dati.righe||[],pers=ANAG.find(p=>p.id===x.id);
+  const eff=pers?riepilogoEffettivo(riepilogoAuto({ruolo:'A',p:pers,k:c.k,n:c.n,a:c.a,b:c.b,righe}),(g.dati&&g.dati.ov)||{}):[];
+  const iv=intervalli(righe).reduce((t,v)=>t+v.dur,0);
+  const tr=righe.map((r,i)=>`<tr><td>${i+1}</td><td>${r.data?it(parse(r.data)):''}</td><td>${esc(r.ora||'')}</td><td>${esc(r.rich||'')}</td><td>${esc(r.motivo||'')}</td><td>${esc(r.arrivo||'')}</td><td>${esc(r.fine||'')}</td><td>${esc(r.durata||'')}</td></tr>`).join('');
+  return `<div class="rg-ad-d">${g.rev>g.inviatoRev?`<p class="err" style="margin:0 0 8px">Dopo l’invio (rev ${pad(g.inviatoRev)}) l’addetto ha salvato la rev ${pad(g.rev)}, non ancora inviata: qui vedi quella più recente.</p>`:''}
+    ${righe.length?`<div class="tw"><table><thead><tr><th>N°</th><th>Data</th><th>Chiamata</th><th>Richiedente</th><th>Motivo</th><th>Arrivo</th><th>Fine</th><th>Durata</th></tr></thead><tbody>${tr}</tbody></table></div>`:'<p style="margin:0 0 8px;color:var(--muted)">Nessun intervento registrato.</p>'}
+    <p style="margin:8px 0 0;color:var(--muted);font-size:.9rem">Interventi: ${righe.length} · durata ${fmtHM(iv)}${eff.length?` · reperibilità ${fmtOre(totaleOre(eff,'rep'))} h · straordinario ${fmtOre(totaleOre(eff,'str'))} h`:''}</p></div>`;
+}
+function rgViewAddetti(){
+  const c=RG.ctx,ad=RG.ad,ed=!c.sola;
+  if(!ad||ad.stato==='cic')return '<div class="soon" style="padding:24px 10px">Caricamento dei registri degli addetti…</div>';
+  if(ad.stato==='err')return `${rgTop()}<div class="alerts"><h3>Registri degli addetti non disponibili</h3>${esc(ad.err)} <button class="mini" data-rg="adRicarica">Riprova</button></div>${rgNav(4)}`;
+  const righe=ad.lista.map(x=>{
+    const g=x.id?ad.regs[x.id]:null,inv=g&&g.inviatoRev!==null&&g.inviatoRev!==undefined,vv=inv&&g.vistoRev===g.inviatoRev&&g.vistoIl;
+    let stato,cl='';
+    if(!x.id)stato='Non è nell’anagrafica: nessun registro';
+    else if(!g)stato='Nessun registro';
+    else if(!inv)stato=`Salvato (rev ${pad(g.rev)}), non inviato`;
+    else stato=`Inviato rev ${pad(g.inviatoRev)} il ${rgDmy(g.inviatoIl)}`;
+    if(vv){stato+=` · <b>visto il ${rgDmy(g.vistoIl)}</b>`;cl=' rg-ok'}
+    else if(inv&&g.vistoRev!==null&&g.vistoRev!==undefined)stato+=' · <span class="mod">visto decaduto (nuova revisione)</span>';
+    const az=inv?`<button class="mini" data-rg="adApri" data-id="${x.id}">${ad.aperto===x.id?'Chiudi':'Apri'}</button>${ed?(vv?`<button class="mini" data-rg="adTogli" data-id="${x.id}">Togli visto</button>`:`<button class="go mini" data-rg="adVisto" data-id="${x.id}">Visto</button>`):''}`:'';
+    return `<div class="rg-ad${cl}"><div class="rg-ad-h"><b>${esc(x.n)}</b><span class="rg-ad-s">${stato}</span><span class="sp"></span>${az}</div>${inv&&ad.aperto===x.id?rgAdDettaglio(c,x,g):''}</div>`}).join('');
+  return `${rgTop()}${rgBanner()}
+    <div class="sec" style="margin-top:12px"><h3>Registri degli addetti</h3>
+      <p style="color:var(--muted);margin:0 0 12px;font-size:.9rem">I registri inviati dagli addetti del turno si leggono direttamente dal database. Dopo averli controllati metti il «visto»: compare accanto alla tua firma nel report dell’addetto. Il visto vale per la revisione inviata: se l’addetto ne invia una nuova, va rimesso.</p>
+      ${ad.msg?`<p class="ok" style="margin:0 0 10px">${esc(ad.msg)}</p>`:''}
+      ${righe||'<p class="soon" style="padding:20px">Nel turno non ci sono addetti.</p>'}
+      <div class="tool" style="margin-top:10px"><button class="ghost" data-rg="adRicarica">Aggiorna</button></div></div>${rgNav(4)}`;
 }
 RG.view=function(passo,c){
   if(!c.p)return `<div class="soon" style="padding:24px 10px">${rlPuoSimulare()?'Scegli una persona dall’anteprima per vedere il suo registro.':'Il tuo account non è collegato a una persona dell’anagrafica.'}</div>`;
   if(RG.key!==rgK(c)||!RG.s||RG.s.stato==='cic')return '<div class="soon" style="padding:24px 10px">Caricamento del registro…</div>';
   RG.ctx=c;
   if(RG.s.stato==='err')return `<div class="alerts"><h3>Registro non disponibile</h3>${esc(RG.s.err)} <button class="mini" data-rg="ricarica">Riprova</button></div>`;
-  return passo===2?rgViewRegistro():passo===3?rgViewRiepilogo():rgViewVerifica();
+  const nome=rgNomePasso(c.L,passo);
+  return nome==='Registro'?rgViewRegistro():nome==='Riepilogo'?rgViewRiepilogo():nome==='Addetti'?rgViewAddetti():rgViewVerifica();
 };

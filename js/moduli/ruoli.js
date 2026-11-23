@@ -1,6 +1,6 @@
 /* Schede dei ruoli (V00.09): Addetto, Coordinatore, Supervisore.
    Prima pagina precompilata dal turno: chi compila, date del turno, componenti con recapiti.
-   Il registro degli interventi e il riepilogo arrivano con la V00.10. */
+   Registro, riepilogo e verifiche: Addetto (V00.10) e Coordinatore (V00.13, con i registri degli addetti e il «visto»). Supervisore: V00.14. */
 const RUOLO_T={A:'Addetto',C:'Coordinatore',S:'Supervisore'};
 const SLOT_RUOLI={SUP:['S'],COO:['C'],VICE:['A','C'],Z1:['A'],Z2:['A'],Z3:['A'],Z4:['A'],Z5:['A'],Z6:['A']};
 const RIGA_CL={SUP:'r-sup',COO:'r-coo',VICE:'r-vic'};
@@ -27,16 +27,19 @@ function rlScegli(p,el,oggi=new Date()){
 }
 const rlTel=a=>(a||[]).filter(Boolean).map(x=>call(x)).join(' ');
 
+const segnoTurno=pr=>pr.tit.length?' ●':pr.sost.length?' ○':'';
 function viewRuolo(L,oggi=new Date()){
   const nome=RUOLO_T[L],p=rlPersona(),el=rlElenco();
   if(!el.length)return `<div class="panel"><div class="soon"><h2>Scheda ${nome}</h2>Non ci sono ancora turni in archivio.</div></div>`;
   if(!el.some(t=>t.k===rlSt.k&&t.n===rlSt.n)){const c=rlScegli(p,el,oggi);rlSt.k=c.k;rlSt.n=c.n}
   const t=el.find(x=>x.k===rlSt.k&&x.n===rlSt.n),m=DATA[t.k],tt=m.turni[t.n];
-  const miei=p?slotsDi(p,t.k,t.n):[];
+  const miei=p?slotsDi(p,t.k,t.n):[],pres=p?presenzeTurno(p,t.k,t.n):{tit:[],sost:[]};
+  const gg=a=>a.map(g=>it(parse(g)).slice(0,5)).join(', ');
   const etichSlot=s=>SLOTS[s][0]==='Addetto'?'Addetto':SLOTS[s][0];
   let nota='';
   if(p){
     if(!miei.length)nota=`<div class="alerts"><h3>Turno</h3>Non risulti tra i componenti di questo turno.</div>`;
+    else if(!pres.tit.length&&pres.sost.length)nota=`<div class="alerts lieve"><h3>Sei sostituto in questo turno</h3>${pres.sost.map(v=>`${it(parse(v.giorno))}: sostituisci ${esc(tt[v.slot].n)} (${esc(etichSlot(v.slot))})`).join('<br>')}</div>`;
     else if(!miei.some(s=>SLOT_RUOLI[s].includes(L)))nota=`<div class="alerts"><h3>Attenzione al ruolo</h3>In questo turno risulti come ${miei.map(etichSlot).join(', ')}, ma stai aprendo la scheda ${nome}.</div>`;
   }
   const ab=p?ruoliAbilitati(p,oggi):{};
@@ -51,25 +54,30 @@ function viewRuolo(L,oggi=new Date()){
       ${(p.t||[]).some(Boolean)?`<div class="box"><span>Telefoni</span>${rlTel(p.t)}</div>`:''}
       <div class="box"><span>Schede abilitate</span><b>${Object.keys(ab).map(x=>RUOLO_T[x]).join(', ')||'—'}</b><span>${Object.entries(ab).map(([x,mo])=>RUOLO_T[x]+': '+mo).join(' · ')}</span></div></div>`
     :`<p style="color:var(--muted);margin:0">${rlPuoSimulare()?'Scegli una persona per vedere la scheda come la vedrebbe lei.':'Il tuo account non è collegato a una persona dell’anagrafica.'}</p>`;
-  const righe=ORDER.filter(s=>tt[s]).map(s=>{const x=tt[s],mio=miei.includes(s),a=x.area||SLOTS[s][1];
-    return `<tr class="${RIGA_CL[s]||'r-add'}"><td>${etichSlot(s)}${a?`<br><small style="color:var(--muted)">${esc(a)}</small>`:''}</td><td><b>${esc(x.n)}</b>${mio?' <span class="pill">tu</span>':''}</td><td>${rlTel(x.t)}</td></tr>`}).join('');
+  const righe=ORDER.filter(s=>tt[s]).map(s=>{const x=tt[s],mio=pres.tit.includes(s),a=x.area||SLOTS[s][1];
+    const sv=(m.var||[]).filter(v=>v.turno===t.n&&v.t==='sost'&&v.slot===s).sort((u,w)=>u.giorno.localeCompare(w.giorno));
+    const mieS=pres.sost.filter(v=>v.slot===s).map(v=>v.giorno).sort();
+    const badge=mio?' <span class="pill">tu</span>':mieS.length?` <span class="pill off">tu · sostituisci il ${gg(mieS)}</span>`:'';
+    const dett=sv.length?`<br><small class="sost-l">${sv.map(v=>`${it(parse(v.giorno)).slice(0,5)}: ${(p&&(v.entraId?v.entraId===p.id:v.entra===p.n))?'<b>tu</b>':esc(v.entra)}`).join(' · ')} <i>(sostituzione)</i></small>`:'';
+    return `<tr class="${RIGA_CL[s]||'r-add'}"><td>${etichSlot(s)}${a?`<br><small style="color:var(--muted)">${esc(a)}</small>`:''}</td><td><b>${esc(x.n)}</b>${badge}${dett}</td><td>${rlTel(x.t)}</td></tr>`}).join('');
   const varz=varTxt(m,t.n);
   /* Addetto: percorso a passi con registro, riepilogo e verifiche (registro.js). Le altre schede arrivano dopo. */
   const mia=personaMia(),ctx={L,p,k:t.k,n:t.n,a:t.a,b:t.b,m,tt,sola:!(p&&!Store.offline&&(Store.richiedeLogin?!!mia&&mia.id===p.id:true))};
-  if(L==='A')rlCtx=ctx;
-  const stepper=L==='A'?`<nav class="passi" aria-label="Passi">${['Turno','Registro','Riepilogo','Verifiche e invio'].map((x,i)=>`<button data-rg="passo" data-p="${i+1}"${rlSt.passo===i+1?' aria-current="step"':''}><span>${i+1}</span>${x}</button>`).join('')}</nav>`:'';
-  const testa=`<div class="banner"><div><small>Scheda</small><h2>${nome}</h2></div>${L==='A'?'':'<span class="pill">Registro e riepilogo: in arrivo</span>'}</div>${sim}${stepper}`;
-  if(L==='A'&&rlSt.passo>1)return `<div class="panel">${testa}${RG.view(rlSt.passo,ctx)}</div>`;
+  const conPassi=!!RG_PASSI[L];
+  if(conPassi)rlCtx=ctx;
+  const stepper=conPassi?`<nav class="passi" aria-label="Passi">${RG_PASSI[L].map((x,i)=>`<button data-rg="passo" data-p="${i+1}"${rlSt.passo===i+1?' aria-current="step"':''}><span>${i+1}</span>${x}</button>`).join('')}</nav>`:'';
+  const testa=`<div class="banner"><div><small>Scheda</small><h2>${nome}</h2></div>${conPassi?'':'<span class="pill">Registro e riepilogo: in arrivo</span>'}</div>${sim}${stepper}`;
+  if(conPassi&&rlSt.passo>1)return `<div class="panel">${testa}${RG.view(rlSt.passo,ctx)}</div>`;
   return `<div class="panel">${testa}
     <div class="sec" style="margin-top:0"><h3>Chi compila</h3>${chi}</div>
     <div class="sec"><h3>Turno</h3>
-      <div class="tool"><select id="rlT" aria-label="Turno">${el.map(x=>`<option value="${x.k}|${x.n}"${x.k===t.k&&x.n===t.n?' selected':''}>${x.n}° turno · ${nomeMese(x.k)} · dal ${it(x.a).slice(0,5)} al ${it(x.b).slice(0,5)}${p&&slotsDi(p,x.k,x.n).length?' ●':''}</option>`).join('')}</select>
-        <span style="color:var(--muted);font-size:.88rem">● = turni in cui compari</span></div>
+      <div class="tool"><select id="rlT" aria-label="Turno">${el.map(x=>`<option value="${x.k}|${x.n}"${x.k===t.k&&x.n===t.n?' selected':''}>${x.n}° turno · ${nomeMese(x.k)} · dal ${it(x.a).slice(0,5)} al ${it(x.b).slice(0,5)}${p?segnoTurno(presenzeTurno(p,x.k,x.n)):''}</option>`).join('')}</select>
+        <span style="color:var(--muted);font-size:.88rem">● turni in cui sei titolare · ○ turni in cui sei solo sostituto</span></div>
       <div class="grid2" style="margin-bottom:12px"><div class="box"><span>Inizio turno</span><b>${it(t.a)} · ore 00:00</b></div><div class="box"><span>Fine turno</span><b>${it(t.b)} · ore 23:59</b></div></div>
       ${nota}
       <div class="sheet"><div class="tw"><table><thead><tr><th>Ruolo</th><th>Nominativo</th><th>Recapiti</th></tr></thead><tbody>${righe}</tbody></table></div>
       ${varz.length?`<ul class="vn">${varz.map(v=>`<li>${esc(v)}</li>`).join('')}</ul>`:''}</div></div>
-    ${L==='A'?'<div class="tool rg-nav"><span class="sp"></span><button class="go" data-rg="passo" data-p="2">Avanti → Registro</button></div>':'<div class="sec"><div class="soon" style="padding:24px 10px"><h2>Registro degli interventi e riepilogo del turno</h2>In arrivo con le prossime versioni.</div></div>'}</div>`;
+    ${conPassi?'<div class="tool rg-nav"><span class="sp"></span><button class="go" data-rg="passo" data-p="2">Avanti → Registro</button></div>':'<div class="sec"><div class="soon" style="padding:24px 10px"><h2>Registro degli interventi e riepilogo del turno</h2>In arrivo con le prossime versioni.</div></div>'}</div>`;
 }
 function rlRender(){
   const el=$('#m-ruolo');if(!el)return;
@@ -82,6 +90,6 @@ function rlRender(){
     RG.onClick(b,rlRender);
   };
   el.oninput=RG.onInput;el.onchange=e=>RG.onChange(e,rlRender);
-  if(rlL==='A'&&rlSt.passo>1&&rlCtx)RG.assicura(rlCtx,rlRender);
+  if(RG_PASSI[rlL]&&rlSt.passo>1&&rlCtx)RG.assicura(rlCtx,rlRender,rlSt.passo);
 }
 Moduli.ruoli={id:'ruoli',titolo:'Schede dei ruoli',monta(el,L){rlL=L;rlSt.passo=1;el.innerHTML='<div id="m-ruolo"></div>';rlRender()}};

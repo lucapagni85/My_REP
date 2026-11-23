@@ -185,3 +185,17 @@ nav.menu a[aria-current=page]{background:var(--petrol);border-color:var(--petrol
 @media (prefers-color-scheme:dark){.pill.err{color:#f0a89a;border-color:#c9604d}}
 code{font:.85em ui-monospace,Menlo,Consolas,monospace;background:var(--bg);padding:1px 5px;border-radius:5px;border:1px solid var(--line)}
 .pill.err{white-space:nowrap}
+
+/* V00.12.2 · sostituzioni in evidenza */
+.sost-l{color:var(--muted);font-size:.82rem}
+.sost-l b{color:var(--petrol-d)}
+
+/* V00.13 · scheda Coordinatore */
+.rg-l{display:block;font-size:.85rem;color:var(--muted);margin-bottom:4px}
+.rg-chips{display:flex;flex-wrap:wrap;gap:6px 14px}
+.rg-ad{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:0 0 10px;background:var(--surface)}
+.rg-ad.rg-ok{border-color:var(--petrol);background:var(--sage-l)}
+.rg-ad-h{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+.rg-ad-s{color:var(--muted);font-size:.88rem}
+.rg-ad-d{margin-top:10px;border-top:1px dashed var(--line);padding-top:10px}
+.rg-chips .chk{white-space:nowrap}

@@ -74,10 +74,29 @@ const SupabaseAdapter={
   /* Registri (V00.10): {dati, rev, inviatoRev, inviatoIl, agg} oppure null se non ancora salvato */
   async leggiRegistro(k,n,L,pid){
     let r;
-    try{r=await this.sb.from('registri').select('dati,rev,inviato_rev,inviato_il,agg').eq('mese',k).eq('turno',n).eq('ruolo',L).eq('persona_id',pid).maybeSingle()}
+    const q=cols=>this.sb.from('registri').select(cols).eq('mese',k).eq('turno',n).eq('ruolo',L).eq('persona_id',pid).maybeSingle();
+    try{r=await q('dati,rev,inviato_rev,inviato_il,agg,visto_rev,visto_il')
+      if(r.error&&/visto_/.test(r.error.message||''))r=await q('dati,rev,inviato_rev,inviato_il,agg')}   /* script SQL V00.13 non ancora eseguito */
     catch(x){const e=new Error(x.message||String(x));e.rete=true;throw e}
     if(r.error){const e=new Error(r.error.message);e.rete=erroreRete(r.error);throw e}
-    const d=r.data;return d?{dati:d.dati,rev:d.rev,inviatoRev:d.inviato_rev,inviatoIl:d.inviato_il,agg:d.agg}:null;
+    const d=r.data;return d?{dati:d.dati,rev:d.rev,inviatoRev:d.inviato_rev,inviatoIl:d.inviato_il,agg:d.agg,vistoRev:d.visto_rev===undefined?null:d.visto_rev,vistoIl:d.visto_il||null}:null;
+  },
+  /* Registri inviati di un turno per ruolo, con il visto (V00.13). Lancia un errore se la lettura non riesce. */
+  async registriTurno(k,n,L){
+    let r;
+    try{r=await this.sb.from('registri').select('persona_id,dati,rev,inviato_rev,inviato_il,visto_rev,visto_il').eq('mese',k).eq('turno',n).eq('ruolo',L)}
+    catch(x){const e=new Error(x.message||String(x));e.rete=true;throw e}
+    if(r.error){const e=new Error(r.error.message+(/visto_/.test(r.error.message)?' (lo script SQL V00.13 è stato eseguito?)':''));e.rete=erroreRete(r.error);throw e}
+    return (r.data||[]).map(d=>({personaId:d.persona_id,rev:d.rev,inviatoRev:d.inviato_rev,inviatoIl:d.inviato_il,vistoRev:d.visto_rev,vistoIl:d.visto_il,dati:d.dati}));
+  },
+  /* Visto del responsabile sul registro inviato (o sua revoca con togli=true). */
+  async vistaRegistro(k,n,L,pid,togli=false){
+    let r;
+    try{r=await this.sb.rpc('vista_registro',{p_mese:k,p_turno:n,p_ruolo:L,p_persona:pid,p_togli:!!togli})}
+    catch(x){return{ok:false,errore:x.message||String(x),rete:true}}
+    if(r.error)return{ok:false,errore:r.error.message+(/does not exist|schema cache/i.test(r.error.message)?' (lo script SQL V00.13 è stato eseguito?)':''),rete:erroreRete(r.error)};
+    const d=r.data;if(!d.ok)return d;
+    return{ok:true,vistoRev:d.visto_rev,vistoIl:d.visto_il};
   },
   /* dati=null con invia=true: invia l'ultima revisione salvata. Ritorna {ok,rev,inviatoRev,inviatoIl} | {ok:false,conflitto,attuale} | {ok:false,errore,rete} */
   async salvaRegistro(k,n,L,pid,dati,baseRev,invia=false,forza=false){

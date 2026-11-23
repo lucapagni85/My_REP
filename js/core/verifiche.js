@@ -2,17 +2,18 @@
    che non vengono salvati né riportati nei report.
    Livelli: 'x' = anomalia, 'l' = da verificare (più leggero). */
 function verificaRegistro(ruolo,c){   /* c={righe, a, b} con a e b Date di inizio e fine turno */
-  const out=[],add=(lv,riga,t)=>out.push({lv,riga,t}),A=iso(c.a),B=iso(c.b);
+  const out=[],add=(lv,riga,t)=>out.push({lv,riga,t}),A=iso(c.a),B=iso(c.b),C=ruolo==='C';   /* C: la durata è l'impegno totale (anche da remoto), non chiamata→fine */
   c.righe.forEach((r,i)=>{
     const n=i+1,o=minDa(r.ora),f=minDa(r.fine);
     if(!r.data)add('x',n,'manca la data');
     else if(r.data<A||r.data>B)add('x',n,`la data ${it(parse(r.data))} è fuori dal turno (dal ${it(c.a)} al ${it(c.b)})`);
     if(o===null)add('x',n,'manca l’ora di chiamata');
-    if(f===null)add('x',n,'manca l’ora di fine intervento');
+    if(f===null)add(C?'l':'x',n,C?'manca l’orario di chiusura dell’intervento':'manca l’ora di fine intervento');
+    if(C&&o!==null&&durMin(r.durata)===null)add('x',n,'manca l’impegno totale');
     if(o!==null&&f!==null){
       const auto=durataAuto(r.ora,r.fine),d=durMin(r.durata);
-      if(d===null)add('x',n,'manca la durata dell’intervento');
-      else if(Math.abs(d-auto)>1)add('x',n,`la durata indicata (${r.durata}) non corrisponde a chiamata e fine (${fmtHM(auto)})`);
+      if(d===null){if(!C)add('x',n,'manca la durata dell’intervento')}
+      else if(!C&&Math.abs(d-auto)>1)add('x',n,`la durata indicata (${r.durata}) non corrisponde a chiamata e fine (${fmtHM(auto)})`);
       const ar=minDa(r.arrivo);
       if(ar!==null){let x=ar-o;if(x<0)x+=1440;if(x>auto)add('x',n,'l’orario di arrivo sul posto non è compreso tra chiamata e fine')}
     }
@@ -31,7 +32,7 @@ function verificaRegistro(ruolo,c){   /* c={righe, a, b} con a e b Date di inizi
   });
   let prec=null;
   [...iv].sort((p,q)=>p.ini-q.ini).forEach(v=>{
-    if(prec&&v.ini<prec.fin)add('x',v.i+1,`si sovrappone all’evento n° ${prec.i+1} (gli interventi possono essere consecutivi, non sovrapposti)`);
+    if(prec&&v.ini<prec.fin)add(C?'l':'x',v.i+1,C?`si sovrappone all’evento n° ${prec.i+1}: l’impegno totale potrebbe essere contato due volte nello straordinario`:`si sovrappone all’evento n° ${prec.i+1} (gli interventi possono essere consecutivi, non sovrapposti)`);
     if(!prec||v.fin>prec.fin)prec=v;
   });
   return out.sort((p,q)=>p.riga-q.riga||(p.lv<q.lv?-1:1));

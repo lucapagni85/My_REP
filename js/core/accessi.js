@@ -21,6 +21,13 @@ function slotsDi(p,k,n){
   (m.var||[]).filter(v=>v.turno===n&&v.t==='sost'&&suo(v.entraId,v.entra)).forEach(v=>{if(!out.includes(v.slot))out.push(v.slot)});
   return out;
 }
+/* Come compare una persona in un turno (V00.12.2): posti da titolare e sostituzioni (giorno per giorno) su posti altrui. */
+function presenzeTurno(p,k,n){
+  const m=DATA[k];if(!m||!m.turni||!m.turni[n])return{tit:[],sost:[]};
+  const suo=(id,nome)=>id?id===p.id:nome===p.n;
+  return{tit:Object.entries(m.turni[n]).filter(([,s])=>s&&suo(s.id,s.n)).map(([sl])=>sl),
+    sost:(m.var||[]).filter(v=>v.turno===n&&v.t==='sost'&&suo(v.entraId,v.entra)&&m.turni[n][v.slot]).map(v=>({slot:v.slot,giorno:v.giorno}))};
+}
 /* Schede abilitate per una persona: {A|C|S: motivo} */
 function ruoliAbilitati(p,oggi=new Date()){
   const out={};

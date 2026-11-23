@@ -1,2 +1,2 @@
 /* Configurazione. adapter: 'supabase' (test) oppure 'local' (browser). Si può forzare con ?adapter=local nell'indirizzo. */
-const CONFIG={versione:'V00.12',adapter:'supabase',cacheOffline:true,documenti:[],dirigente:'Ristori Cristiano',festiviLocali:[],utenteTest:{id:'admin',pwd:'123prova'}};
+const CONFIG={versione:'V00.13',adapter:'supabase',cacheOffline:true,documenti:[],dirigente:'Ristori Cristiano',festiviLocali:[],utenteTest:{id:'admin',pwd:'123prova'}};
