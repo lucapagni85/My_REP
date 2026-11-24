@@ -26,7 +26,7 @@ function viewMail(){
       <td><span class="pill${x.esito==='ok'?'':' err'}">${x.esito==='ok'?'Inviata':'Non inviata'}</span>${x.errore?`<br><small class="err">${esc(x.errore)}</small>`:''}</td>
       <td><button class="mini" data-ml="reinvia" data-id="${x.id}"${mlBusy?' disabled':''}>Reinvia</button></td></tr>`}).join('');
   return `<div class="panel ed an"><div class="tool"><h2>Mail</h2><span class="sp"></span><button class="ghost" id="mlAgg">Aggiorna</button></div>
-    <p style="margin:0 0 12px;color:var(--muted);font-size:.85rem">Avvisi automatici dell’app: registro inviato → coordinatore del turno; turno pubblicato o modificato («Salva e avvisa» in Genera turni) → tutte le utenze. Le mail partono da un indirizzo di sistema tramite Brevo.</p>
+    <p style="margin:0 0 12px;color:var(--muted);font-size:.85rem">Avvisi automatici dell’app: registro inviato → responsabile del turno; turno pubblicato o modificato («Salva e avvisa» in Genera turni) → tutte le utenze. Gli indirizzi sono sempre quelli dell’<b>anagrafica</b> (campo email della persona), non quelli degli account. Le mail partono da un indirizzo di sistema tramite Brevo.</p>
     ${mlMsg?`<p class="ok" style="margin:0 0 12px">${esc(mlMsg)}</p>`:''}
     <div class="sec"><h3>Configurazione</h3>${conf}
       ${ok?`<div class="tool" style="margin-top:14px"><button class="go" id="mlProva"${mlBusy||(S.manca&&S.manca.length)?' disabled':''}>Invia mail di prova al mio indirizzo</button></div>`:''}</div>

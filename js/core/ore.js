@@ -11,6 +11,10 @@ const fmtHM=min=>`${Math.floor(min/60)}:${pad(min%60)}`;
 const r2=x=>Math.round(x*100)/100;
 const fmtOre=h=>(Math.round(h*100)/100).toFixed(2).replace('.',',');
 const parseOre=s=>{const t=String(s).trim().replace(',','.');if(!/^\d+(\.\d+)?$/.test(t))return null;const x=parseFloat(t);return x>=0&&x<=24?r2(x):null};
+/* Ore in formato h:mm (V00.13.1): i valori restano decimali nei dati, si mostrano e si scrivono come ore e minuti. */
+const oreHM=h=>fmtHM(Math.round(h*60));
+const parseHM=s=>{const m=/^(\d{1,2})(?::([0-5]\d))?$/.exec(String(s).trim());if(!m)return null;const min=(+m[1])*60+(+(m[2]||0));return min<=1440?r2(min/60):null};
+const totaleHM=(eff,campo)=>fmtHM(eff.filter(x=>x.inc).reduce((t,x)=>t+Math.round(x[campo]*60),0));   /* somma dei minuti, come nel PDF */
 const giornoN=g=>{const[y,m,d]=g.split('-').map(Number);return Math.round(Date.UTC(y,m-1,d)/86400000)};
 const isoDaN=n=>new Date(n*86400000).toISOString().slice(0,10);
 const dowIso=g=>new Date(giornoN(g)*86400000).getUTCDay();   /* 0 = domenica */

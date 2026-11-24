@@ -9,7 +9,8 @@ const Mail={
     if(r.ripetuto)return{ok:true,t:'Avviso mail già inviato poco fa.'};
     if(!r.ok&&!r.dettagli)return{ok:false,t:'Avviso mail non inviato: '+(r.errore||'errore sconosciuto')+'.'+(r.rete?'':agg)};
     const n=r.inviati||0,e=r.errori||0,p=r.prova?` (modalità prova: recapitato a ${(r.destinatari&&r.destinatari[0])||'indirizzo di prova'})`:'';
-    if(!e)return{ok:true,t:`Avviso mail inviato a ${n} ${n===1?'destinatario':'destinatari'}${p}.`};
-    return{ok:false,t:`Avviso mail: ${n} inviat${n===1?'a':'e'}, ${e} non riuscit${e===1?'a':'e'} (${(r.dettagli||[]).join('; ')}).${agg}`};
+    const av=r.avvertenze&&r.avvertenze.length?` Attenzione: ${r.avvertenze.join('; ')}.`:'';
+    if(!e)return{ok:true,t:`Avviso mail inviato a ${n} ${n===1?'destinatario':'destinatari'}${p}.${av}`};
+    return{ok:false,t:`Avviso mail: ${n} inviat${n===1?'a':'e'}, ${e} non riuscit${e===1?'a':'e'} (${(r.dettagli||[]).join('; ')}).${av}${agg}`};
   }
 };

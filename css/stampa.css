@@ -47,3 +47,60 @@
  #print .st-cv .el .r{font-weight:600;text-transform:uppercase;font-size:10.5pt;letter-spacing:1px;padding-top:1px}
  #print .st-cv .el .n{line-height:1.55}
 }
+
+/* ===== V00.13.1 · anteprima a schermo dei report (stile PDF) e intestazione/firme del riepilogo nell'app ===== */
+@media screen{
+ .rep-view{overflow-x:auto;padding:4px 2px 10px}
+ .rep-view .st-pp{background:#fff;color:#000;border:1px solid var(--line);border-radius:6px;box-shadow:var(--shadow);padding:20px 24px;margin:0 auto 18px;font:10pt/1.4 var(--sans)}
+ .rep-view .st-p1{width:1100px}.rep-view .st-p2{width:760px}
+ .rep-view .st-hd{position:relative;text-align:center;margin-bottom:12px;min-height:24mm}
+ .rep-view .st-hd img{position:absolute;left:0;top:0;height:23mm;width:auto}
+ .rep-view .st-hd p{margin:0}
+ .rep-view .st-hd .a{font:600 15pt var(--serif)}.rep-view .st-hd .b{font:600 11.5pt var(--serif);margin-top:3px}
+ .rep-view .st-hd .c{font:600 10pt var(--sans);margin-top:8px}.rep-view .st-hd .d{font:500 9pt var(--sans);margin-top:2px}
+ .rep-view .st-pm{font-size:9pt;margin:6px 0}
+ .rep-view .st-pt{width:100%;border-collapse:collapse;font-size:8pt}
+ .rep-view .st-pt th,.rep-view .st-pt td{border:1px solid #444;padding:3px 5px;vertical-align:top;text-align:left}
+ .rep-view .st-pt th{background:#cfcfcf;color:#000;font-weight:700;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+ .rep-view .st-pt td.vuoto{text-align:center;font-style:italic;padding:8px}
+ .rep-view .st-rp{font-size:11pt;text-align:justify;margin:30px 0 16px}
+ .rep-view .st-rt2{width:90%;margin:0 auto 40px;border-collapse:collapse;font-size:11pt;table-layout:fixed}
+ .rep-view .st-rt2 th,.rep-view .st-rt2 td{border:1px solid #000;padding:3px 6px;text-align:center}
+ .rep-view .st-rt2 th:nth-child(1){width:50%}.rep-view .st-rt2 th:nth-child(2){width:30%}.rep-view .st-rt2 th:nth-child(3){width:20%}
+ .rep-view .st-rt2 th{font-weight:600}.rep-view .st-rt2 td.nm{font-weight:600;vertical-align:middle;width:50%}
+ .rep-view .st-rt2 td.dt,.rep-view .st-rt2 tr.tot td{font-weight:600}
+ .rep-view .st-sg{display:grid;grid-template-columns:max-content 50mm 1fr;gap:36px 12px;align-items:end;margin-top:56px;font-size:11pt}
+ .rep-view .st-sg .fi{display:flex;gap:8px;align-items:flex-end}
+ .rep-view .st-sg .fi i{flex:1;border-bottom:1px solid #000;height:14px;position:relative}
+ .rep-view .st-sg .sig{position:absolute;left:8px;bottom:0;font:500 19pt/1 'Caveat','Segoe Script','Brush Script MT',cursive;white-space:nowrap}
+ .rep-view .st-pt.st-pc{table-layout:fixed;font-size:6.6pt}
+ .rep-view .st-pt.st-pc th,.rep-view .st-pt.st-pc td{padding:2px 3px;overflow-wrap:anywhere;white-space:pre-wrap}
+ .rep-view .st-pt.st-pc th{white-space:normal;font-size:6pt}
+ .rep-view .st-sg .vi{font-size:8pt;white-space:nowrap}
+ .rep-view .st-pp.st-cv{display:flex;flex-direction:column;align-items:center;text-align:center;height:248mm;overflow:hidden}
+ .rep-view .st-cv .a{font:600 27pt/1.15 var(--serif);margin:16mm 0 0;letter-spacing:.5px}
+ .rep-view .st-cv .b{font:600 14.5pt/1.3 var(--serif);margin:5mm 0 0;max-width:150mm}
+ .rep-view .st-cv img{height:58mm;width:auto;margin:15mm 0 14mm}
+ .rep-view .st-cv .c{font:600 21pt/1.2 var(--sans);letter-spacing:3px;margin:0}
+ .rep-view .st-cv .d{font:500 12.5pt/1.5 var(--sans);margin:6mm 0 0;max-width:150mm;text-wrap:balance}
+ .rep-view .st-cv .rl{width:60mm;border-top:1.2px solid #000;margin:14mm 0 10mm}
+ .rep-view .st-cv .el{display:grid;grid-template-columns:42mm 1fr;gap:5mm 8mm;text-align:left;width:140mm;font-size:12.5pt}
+ .rep-view .st-cv .el .r{font-weight:600;text-transform:uppercase;font-size:10.5pt;letter-spacing:1px;padding-top:1px}
+ .rep-view .st-cv .el .n{line-height:1.55}
+ .rg-doc .st-hd{position:relative;text-align:center;margin-bottom:12px;min-height:24mm}
+ .rg-doc .st-hd img{position:absolute;left:0;top:0;height:23mm;width:auto}
+ .rg-doc .st-hd p{margin:0}
+ .rg-doc .st-hd .a{font:600 15pt var(--serif)}.rg-doc .st-hd .b{font:600 11.5pt var(--serif);margin-top:3px}
+ .rg-doc .st-hd .c{font:600 10pt var(--sans);margin-top:8px}.rg-doc .st-hd .d{font:500 9pt var(--sans);margin-top:2px}
+ .rg-doc .st-sg{display:grid;grid-template-columns:max-content 50mm 1fr;gap:36px 12px;align-items:end;margin-top:56px;font-size:11pt}
+ .rg-doc .st-sg .fi{display:flex;gap:8px;align-items:flex-end}
+ .rg-doc .st-sg .fi i{flex:1;border-bottom:1px solid #000;height:14px;position:relative}
+ .rg-doc .st-sg .sig{position:absolute;left:8px;bottom:0;font:500 19pt/1 'Caveat','Segoe Script','Brush Script MT',cursive;white-space:nowrap}
+ .rg-doc .st-sg .vi{font-size:8pt;white-space:nowrap}
+ .rg-doc .st-rp{font-size:.95rem;text-align:justify;margin:18px 0 8px}
+ .rg-doc .st-sg{margin-top:34px;gap:26px 12px;font-size:.95rem}
+ .rg-doc .st-hd{min-height:0;padding-left:clamp(0px,9vw,110px)}
+ .rg-doc .st-hd img{height:15mm}
+}
+@media screen and (max-width:760px){.rg-doc .st-hd{text-align:left;padding-left:0}.rg-doc .st-hd img{position:static;display:block;margin:0 0 6px}.rg-doc .st-sg{grid-template-columns:auto auto 1fr}.rg-doc .st-sg .fi i{min-width:60px}}
+@media screen and (max-width:760px){.rg-doc td.num{width:92px}.rg-doc input.ore{padding:4px 5px;min-width:0}.rg-doc .st-sg .sig{font-size:13pt;left:4px}.rg-doc .st-sg .fi i{overflow:visible}}
