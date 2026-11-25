@@ -152,18 +152,18 @@ function rgComposizione(){
 /* La stessa composizione come tabella a schermo (passo «Registri del turno») */
 function rgTabComposizione(){
   const T=rgComposizione();if(!T)return '';
-  const hm=v=>v==null?'—':fmtHM(v),sr=T.reduce((t,r)=>t+(r.rep||0),0),ss=T.reduce((t,r)=>t+(r.str||0),0);
+  const hm=v=>v==null?'—':fmtHM(v);
   return `<div class="sec" style="margin-top:12px"><h3>Composizione del turno e ore</h3>
     <p style="color:var(--muted);margin:0 0 12px;font-size:.9rem">Le ore vengono dal riepilogo di ciascuno (correzioni manuali comprese). Chi non ha ancora inviato il registro compare con «—» e non entra nei totali. È la tabella che trovi nella copertina del fascicolo completo.</p>
     <div class="tw"><table class="rg-comp"><thead><tr><th>Ruolo</th><th>Nominativo</th><th class="num">Ore reperibilità</th><th class="num">Ore straordinario</th><th class="num">Totale ore</th></tr></thead><tbody>${
       T.map(r=>`<tr><td>${esc(r.ruolo)}</td><td><b>${esc(r.nome||'—')}</b>${r.nota?`<br><small class="mod">${esc(r.nota)}</small>`:''}</td><td class="num">${hm(r.rep)}${r.rr?'*':''}</td><td class="num">${hm(r.str)}${r.rs?'*':''}</td><td class="num">${r.rep==null?'—':fmtHM(r.rep+r.str)+(r.rr||r.rs?'*':'')}</td></tr>`).join('')
-    }<tr class="tot"><td colspan="2">TOTALE</td><td class="num">${fmtHM(sr)}</td><td class="num">${fmtHM(ss)}</td><td class="num">${fmtHM(sr+ss)}</td></tr></tbody></table></div>${T.some(r=>r.rr||r.rs)?'<p style="margin:8px 0 0;font-size:.85rem;color:var(--muted)">* Valore rettificato dal supervisore (vedi «Rettifica» nell’elenco qui sopra e il report della persona).</p>':''}</div>`;
+    }</tbody></table></div>${T.some(r=>r.rr||r.rs)?'<p style="margin:8px 0 0;font-size:.85rem;color:var(--muted)">* Valore rettificato dal supervisore (vedi «Rettifica» nell’elenco qui sopra e il report della persona).</p>':''}</div>`;
 }
 /* Fascicolo: C = coordinatore + addetti che hanno inviato; S = copertina + supervisore + coordinatore + addetti (ciascuno con il proprio «visto»). */
 function rgFascicolo(){
   const c=RG.ctx,ad=RG.ad;if(!c||c.L==='A'||!ad||ad.stato!=='ok')return null;
   const S=c.L==='S',inviato=g=>g&&g.inviatoRev!==null&&g.inviatoRev!==undefined,mancanti=[];let n=0,html='';
-  if(S)html+=Stampa.copertina({da:it(c.a),a:it(c.b),supervisore:c.p.n,coordinatore:ad.coords.map(x=>x.n).join(', ')||(c.tt&&c.tt.COO?c.tt.COO.n:''),addetti:ad.lista.map(x=>x.n),tabella:rgComposizione()});
+  if(S)html+=Stampa.copertina({da:it(c.a),a:it(c.b),supervisore:c.p.n,coordinatore:ad.coords.map(x=>x.n).join(', ')||(c.tt&&c.tt.COO?c.tt.COO.n:''),addetti:ad.lista.map(x=>x.n),dirigente:CONFIG.dirigente||'',tabella:rgComposizione()});
   html+=(S?Stampa.supervisore:Stampa.coordinatore)(rgDatiStampa());
   if(S)for(const x of ad.coords){const g=x.id?ad.regsC[x.id]:null;if(!inviato(g)){mancanti.push(x.n);continue}html+=rgAdReport(c,x,g,'C').html;n++}
   for(const x of ad.lista){const g=x.id?ad.regs[x.id]:null;if(!inviato(g)){mancanti.push(x.n);continue}html+=rgAdReport(c,x,g,'A').html;n++}

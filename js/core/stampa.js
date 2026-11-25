@@ -54,35 +54,35 @@ const Stampa={
   /* o = { D:{anno,mese,rev}, nome, persona?, coordinatore, supervisore, da, a, righe:[[12 celle]],
            rep:{rows,tot}, str:{rows,tot}, vistoC?, vistoS? } */
   addetto(o){
-    return `<section class="st-pp st-p1">${stHead(o.D,'A')}<p class="st-pm"><b>${ST_RUOLO.A.reg}</b> · ${esc(o.nome)} · turno dal ${esc(o.da)} al ${esc(o.a)}</p>${stTabRegistro('A',o.righe)}</section>`
-     +`<section class="st-pp st-p2">${stHead(o.D,'A')}<p class="st-rp">${stT1(o.nome)}</p>${stTabRiep(o.nome,o.rep.rows,o.rep.tot,o.rett&&o.rett.rep)}<p class="st-rp">${ST_T2}</p>${stTabRiep(o.nome,o.str.rows,o.str.tot,o.rett&&o.rett.str)}${stNotaRett(o.rett)}`
-     +`<div class="st-sg">${stFirma('L’ADDETTO',o.nome,true,null,o.persona)}${stFirma('IL COORDINATORE',o.coordinatore,!!o.vistoC,o.vistoC)}${stFirma('IL SUPERVISORE',o.supervisore,!!o.vistoS,o.vistoS)}</div></section>`;
+    return `<section class="st-pp st-p2">${stHead(o.D,'A')}<p class="st-rp">${stT1(o.nome)}</p>${stTabRiep(o.nome,o.rep.rows,o.rep.tot,o.rett&&o.rett.rep)}<p class="st-rp">${ST_T2}</p>${stTabRiep(o.nome,o.str.rows,o.str.tot,o.rett&&o.rett.str)}${stNotaRett(o.rett)}`
+     +`<div class="st-sg">${stFirma('L’ADDETTO',o.nome,true,null,o.persona)}${stFirma('IL COORDINATORE',o.coordinatore,!!o.vistoC,o.vistoC)}${stFirma('IL SUPERVISORE',o.supervisore,!!o.vistoS,o.vistoS)}</div></section>`
+     +`<section class="st-pp st-p1">${stHead(o.D,'A')}<p class="st-pm"><b>${ST_RUOLO.A.reg}</b> · ${esc(o.nome)} · turno dal ${esc(o.da)} al ${esc(o.a)}</p>${stTabRegistro('A',o.righe)}</section>`;
   },
   /* righe: [[17 celle]] */
   coordinatore(o){
-    return `<section class="st-pp st-p1">${stHead(o.D,'C')}<p class="st-pm"><b>${ST_RUOLO.C.reg}</b> · ${esc(o.nome)} · turno dal ${esc(o.da)} al ${esc(o.a)}</p>${stTabRegistro('C',o.righe)}</section>`
-     +`<section class="st-pp st-p2">${stHead(o.D,'C')}<p class="st-rp">${stT1(o.nome)}</p>${stTabRiep(o.nome,o.rep.rows,o.rep.tot,o.rett&&o.rett.rep)}<p class="st-rp">${ST_T2}</p>${stTabRiep(o.nome,o.str.rows,o.str.tot,o.rett&&o.rett.str)}${stNotaRett(o.rett)}`
-     +`<div class="st-sg">${stFirma('IL COORDINATORE',o.nome,true,null,o.persona)}${stFirma('IL SUPERVISORE',o.supervisore,!!o.vistoS,o.vistoS)}</div></section>`;
+    return `<section class="st-pp st-p2">${stHead(o.D,'C')}<p class="st-rp">${stT1(o.nome)}</p>${stTabRiep(o.nome,o.rep.rows,o.rep.tot,o.rett&&o.rett.rep)}<p class="st-rp">${ST_T2}</p>${stTabRiep(o.nome,o.str.rows,o.str.tot,o.rett&&o.rett.str)}${stNotaRett(o.rett)}`
+     +`<div class="st-sg">${stFirma('IL COORDINATORE',o.nome,true,null,o.persona)}${stFirma('IL SUPERVISORE',o.supervisore,!!o.vistoS,o.vistoS)}</div></section>`
+     +`<section class="st-pp st-p1">${stHead(o.D,'C')}<p class="st-pm"><b>${ST_RUOLO.C.reg}</b> · ${esc(o.nome)} · turno dal ${esc(o.da)} al ${esc(o.a)}</p>${stTabRegistro('C',o.righe)}</section>`;
   },
   /* righe: [[14 celle]]; dirigente: nome del dirigente (firma senza corsivo) */
   supervisore(o){
-    return `<section class="st-pp st-p1">${stHead(o.D,'S')}<p class="st-pm"><b>${ST_RUOLO.S.reg}</b> · ${esc(o.nome)} · turno dal ${esc(o.da)} al ${esc(o.a)}</p>${stTabRegistro('S',o.righe)}</section>`
-     +`<section class="st-pp st-p2">${stHead(o.D,'S')}<p class="st-rp">${stT1(o.nome)}</p>${stTabRiep(o.nome,o.rep.rows,o.rep.tot)}<p class="st-rp">${ST_T2}</p>${stTabRiep(o.nome,o.str.rows,o.str.tot)}`
-     +`<div class="st-sg">${stFirma('IL SUPERVISORE',o.nome,true,null,o.persona)}${stFirma('IL DIRIGENTE',o.dirigente)}</div></section>`;
+    return `<section class="st-pp st-p2">${stHead(o.D,'S')}<p class="st-rp">${stT1(o.nome)}</p>${stTabRiep(o.nome,o.rep.rows,o.rep.tot)}<p class="st-rp">${ST_T2}</p>${stTabRiep(o.nome,o.str.rows,o.str.tot)}`
+     +`<div class="st-sg">${stFirma('IL SUPERVISORE',o.nome,true,null,o.persona)}${stFirma('IL DIRIGENTE',o.dirigente)}</div></section>`
+     +`<section class="st-pp st-p1">${stHead(o.D,'S')}<p class="st-pm"><b>${ST_RUOLO.S.reg}</b> · ${esc(o.nome)} · turno dal ${esc(o.da)} al ${esc(o.a)}</p>${stTabRegistro('S',o.righe)}</section>`;
   },
-  /* Copertina del fascicolo completo: o={da,a,supervisore,coordinatore,addetti:[nomi], tabella?:[{ruolo,nome,rep,str}]}
-     Con «tabella» (V00.14.1) la composizione del turno è una tabella con i totali di ciascuno (minuti; rep/str null = registro non inviato → «—»);
+  /* Copertina del fascicolo completo: o={da,a,supervisore,coordinatore,dirigente,addetti:[nomi], tabella?:[{ruolo,nome,rep,str,rr?,rs?}]}
+     Con «tabella» (V00.14.1) la composizione del turno è una tabella con i totali di ciascuno (minuti; rep/str null = registro non inviato → «—»;
+     nessuna riga di somma, V00.15.1) e in fondo lo spazio per la firma olografa del dirigente;
      senza, resta l'elenco dei nomi. */
   copertina(o){
     const ad=(o.addetti||[]).filter(Boolean),T=o.tabella;
     const testa=`<p class="a">PROVINCIA DI PISA</p><p class="b">SETTORE VIABILITÀ, TRASPORTI E PROTEZIONE CIVILE</p><img src="${LOGO}" alt="">`
      +`<p class="c">SERVIZIO DI REPERIBILITÀ</p><p class="d">Turno dalle ore 00:00 del <b>${esc(o.da)}</b> alle ore 23:59:59 del <b>${esc(o.a)}</b></p><div class="rl"></div>`;
     if(T&&T.length){
-      const hm=v=>v==null?'—':stHm(v),ha=r=>r.rep!=null&&r.str!=null,rt=r=>r.rr||r.rs,
-        sr=T.reduce((t,r)=>t+(r.rep||0),0),ss=T.reduce((t,r)=>t+(r.str||0),0);
+      const hm=v=>v==null?'—':stHm(v),ha=r=>r.rep!=null&&r.str!=null,rt=r=>r.rr||r.rs;
       return `<section class="st-pp st-p2 st-cv st-cvt">${testa}<table class="st-cp"><thead><tr><th>Ruolo</th><th>Nominativo</th><th>Ore reperibilità</th><th>Ore straordinario</th><th>Totale ore</th></tr></thead><tbody>`
        +T.map(r=>`<tr><td class="ru">${esc(r.ruolo)}</td><td class="nm">${esc(r.nome||'—')}</td><td>${hm(r.rep)}${r.rr?'*':''}</td><td>${hm(r.str)}${r.rs?'*':''}</td><td>${ha(r)?stHm(r.rep+r.str)+(rt(r)?'*':''):'—'}</td></tr>`).join('')
-       +`<tr class="tot"><td colspan="2">TOTALE</td><td>${stHm(sr)}</td><td>${stHm(ss)}</td><td>${stHm(sr+ss)}</td></tr></tbody></table>${T.some(rt)?'<p class="st-cpn">* Valore rettificato dal supervisore (motivazione nel report della persona).</p>':''}</section>`;
+       +`</tbody></table>${T.some(rt)?'<p class="st-cpn">* Valore rettificato dal supervisore (motivazione nel report della persona).</p>':''}<div class="st-sg st-cfm">${stFirma('IL DIRIGENTE',o.dirigente)}</div></section>`;
     }
     return `<section class="st-pp st-p2 st-cv">${testa}`
      +`<div class="el"><div class="r">Supervisore</div><div class="n">${esc(o.supervisore||'—')}</div><div class="r">Coordinatore</div><div class="n">${esc(o.coordinatore||'—')}</div>`
