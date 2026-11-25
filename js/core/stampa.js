@@ -65,11 +65,21 @@ const Stampa={
      +`<section class="st-pp st-p2">${stHead(o.D,'S')}<p class="st-rp">${stT1(o.nome)}</p>${stTabRiep(o.nome,o.rep.rows,o.rep.tot)}<p class="st-rp">${ST_T2}</p>${stTabRiep(o.nome,o.str.rows,o.str.tot)}`
      +`<div class="st-sg">${stFirma('IL SUPERVISORE',o.nome,true,null,o.persona)}${stFirma('IL DIRIGENTE',o.dirigente)}</div></section>`;
   },
-  /* Copertina del fascicolo completo: o={da,a,supervisore,coordinatore,addetti:[nomi]} */
+  /* Copertina del fascicolo completo: o={da,a,supervisore,coordinatore,addetti:[nomi], tabella?:[{ruolo,nome,rep,str}]}
+     Con «tabella» (V00.14.1) la composizione del turno è una tabella con i totali di ciascuno (minuti; rep/str null = registro non inviato → «—»);
+     senza, resta l'elenco dei nomi. */
   copertina(o){
-    const ad=(o.addetti||[]).filter(Boolean);
-    return `<section class="st-pp st-p2 st-cv"><p class="a">PROVINCIA DI PISA</p><p class="b">SETTORE VIABILITÀ, TRASPORTI E PROTEZIONE CIVILE</p><img src="${LOGO}" alt="">`
-     +`<p class="c">SERVIZIO DI REPERIBILITÀ</p><p class="d">Turno dalle ore 00:00 del <b>${esc(o.da)}</b> alle ore 23:59:59 del <b>${esc(o.a)}</b></p><div class="rl"></div>`
+    const ad=(o.addetti||[]).filter(Boolean),T=o.tabella;
+    const testa=`<p class="a">PROVINCIA DI PISA</p><p class="b">SETTORE VIABILITÀ, TRASPORTI E PROTEZIONE CIVILE</p><img src="${LOGO}" alt="">`
+     +`<p class="c">SERVIZIO DI REPERIBILITÀ</p><p class="d">Turno dalle ore 00:00 del <b>${esc(o.da)}</b> alle ore 23:59:59 del <b>${esc(o.a)}</b></p><div class="rl"></div>`;
+    if(T&&T.length){
+      const hm=v=>v==null?'—':stHm(v),ha=r=>r.rep!=null&&r.str!=null,
+        sr=T.reduce((t,r)=>t+(r.rep||0),0),ss=T.reduce((t,r)=>t+(r.str||0),0);
+      return `<section class="st-pp st-p2 st-cv st-cvt">${testa}<table class="st-cp"><thead><tr><th>Ruolo</th><th>Nominativo</th><th>Ore reperibilità</th><th>Ore straordinario</th><th>Totale ore</th></tr></thead><tbody>`
+       +T.map(r=>`<tr><td class="ru">${esc(r.ruolo)}</td><td class="nm">${esc(r.nome||'—')}</td><td>${hm(r.rep)}</td><td>${hm(r.str)}</td><td>${ha(r)?stHm(r.rep+r.str):'—'}</td></tr>`).join('')
+       +`<tr class="tot"><td colspan="2">TOTALE</td><td>${stHm(sr)}</td><td>${stHm(ss)}</td><td>${stHm(sr+ss)}</td></tr></tbody></table></section>`;
+    }
+    return `<section class="st-pp st-p2 st-cv">${testa}`
      +`<div class="el"><div class="r">Supervisore</div><div class="n">${esc(o.supervisore||'—')}</div><div class="r">Coordinatore</div><div class="n">${esc(o.coordinatore||'—')}</div>`
      +`<div class="r">${ad.length===1?'Addetto':'Addetti'}</div><div class="n">${ad.length?ad.map(esc).join('<br>'):'—'}</div></div></section>`;
   },

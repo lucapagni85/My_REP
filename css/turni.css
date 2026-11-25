@@ -200,3 +200,10 @@ code{font:.85em ui-monospace,Menlo,Consolas,monospace;background:var(--bg);paddi
 .rg-ad-d{margin-top:10px;border-top:1px dashed var(--line);padding-top:10px}
 .rg-chips .chk{white-space:nowrap}
 .rg-sub{margin:14px 0 8px;font-size:.95rem;color:var(--petrol-d)}
+
+/* V00.14.1 · tabella «Composizione del turno e ore» (scheda Supervisore) */
+.rg-comp{width:100%;border-collapse:collapse}
+.rg-comp th,.rg-comp td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+.rg-comp th{font-size:.82rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600}
+.rg-comp .num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.rg-comp tr.tot td{font-weight:700;border-top:2px solid var(--line);border-bottom:0;background:var(--sage-l)}

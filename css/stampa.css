@@ -46,6 +46,15 @@
  #print .st-cv .el{display:grid;grid-template-columns:42mm 1fr;gap:5mm 8mm;text-align:left;width:140mm;font-size:12.5pt}
  #print .st-cv .el .r{font-weight:600;text-transform:uppercase;font-size:10.5pt;letter-spacing:1px;padding-top:1px}
  #print .st-cv .el .n{line-height:1.55}
+ #print .st-cvt .a{margin-top:6mm}
+ #print .st-cvt img{height:38mm;margin:8mm 0 8mm}
+ #print .st-cvt .rl{margin:8mm 0 8mm}
+ #print .st-cp{width:100%;border-collapse:collapse;font-size:10.5pt;table-layout:fixed;text-align:center}
+ #print .st-cp th,#print .st-cp td{border:1px solid #000;padding:1.7mm 2mm;overflow-wrap:anywhere}
+ #print .st-cp th{background:#cfcfcf;color:#000;font-weight:700;font-size:9.5pt;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+ #print .st-cp th:nth-child(1){width:24%}#print .st-cp th:nth-child(2){width:31%}#print .st-cp th:nth-child(n+3){width:15%}
+ #print .st-cp td.ru,#print .st-cp td.nm{text-align:left}#print .st-cp td.nm{font-weight:600}
+ #print .st-cp tr{break-inside:avoid}#print .st-cp tr.tot td{font-weight:700;background:#ececec;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 
 /* ===== V00.13.1 · anteprima a schermo dei report (stile PDF) e intestazione/firme del riepilogo nell'app ===== */
@@ -87,6 +96,15 @@
  .rep-view .st-cv .el{display:grid;grid-template-columns:42mm 1fr;gap:5mm 8mm;text-align:left;width:140mm;font-size:12.5pt}
  .rep-view .st-cv .el .r{font-weight:600;text-transform:uppercase;font-size:10.5pt;letter-spacing:1px;padding-top:1px}
  .rep-view .st-cv .el .n{line-height:1.55}
+ .rep-view .st-cvt .a{margin-top:6mm}
+ .rep-view .st-cvt img{height:38mm;margin:8mm 0 8mm}
+ .rep-view .st-cvt .rl{margin:8mm 0 8mm}
+ .rep-view .st-cp{width:100%;border-collapse:collapse;font-size:10.5pt;table-layout:fixed;text-align:center}
+ .rep-view .st-cp th,.rep-view .st-cp td{border:1px solid #000;padding:1.7mm 2mm;overflow-wrap:anywhere}
+ .rep-view .st-cp th{background:#cfcfcf;color:#000;font-weight:700;font-size:9.5pt;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+ .rep-view .st-cp th:nth-child(1){width:24%}.rep-view .st-cp th:nth-child(2){width:31%}.rep-view .st-cp th:nth-child(n+3){width:15%}
+ .rep-view .st-cp td.ru,.rep-view .st-cp td.nm{text-align:left}.rep-view .st-cp td.nm{font-weight:600}
+ .rep-view .st-cp tr{break-inside:avoid}.rep-view .st-cp tr.tot td{font-weight:700;background:#ececec;-webkit-print-color-adjust:exact;print-color-adjust:exact}
  .rg-doc .st-hd{position:relative;text-align:center;margin-bottom:12px;min-height:24mm}
  .rg-doc .st-hd img{position:absolute;left:0;top:0;height:23mm;width:auto}
  .rg-doc .st-hd p{margin:0}
