@@ -9,6 +9,7 @@
      salvaPersona(p)                     -> {ok, id} | {ok:false, errore}   (p senza id = nuova persona: l'id lo assegna l'adattatore)
      importa(mesi, anagrafica) / esporta()
      registriTurno(k,n,L) -> [{personaId,rev,inviatoRev,inviatoIl,vistoRev,vistoIl,vistoSRev,vistoSIl,dati}]   (V00.13; vistoS* = visto del supervisore sul registro di un addetto, V00.14.1) registri inviati del turno per ruolo
+     rettificaRegistro(k,n,L,pid,{rep,str,motivo},togli) -> {ok,rett}   (V00.14.2) rettifica dei totali (minuti) da parte del supervisore; rett={rep,str,motivo,chi,il,rev}
      vistaRegistro(k,n,L,pid,togli,come) -> {ok,vistoRev,vistoIl}   (V00.13; come='S' = visto del supervisore su un registro addetto, V00.14.1)
      inviaMail(corpo) -> {ok,...}    (V00.12) avvisi via mail tramite la funzione server; il locale risponde {ok:false,nonDisponibile:true}. Facoltativi: mailAttive, elencoInvii()
      login(id, pwd) -> bool  (locale)  |  login(email, pwd) -> {ok, errore}  (remoti)   /   logout()
@@ -59,7 +60,7 @@ const LocalAdapter={
   /* Registri (V00.10), stesso contratto dell'adattatore Supabase */
   LSR:'turni_registri_v1',
   regLeggi(){try{return JSON.parse(localStorage.getItem(this.LSR)||'{}')}catch(e){return{}}},
-  async leggiRegistro(k,n,L,pid){const r=this.regLeggi()[`${k}|${n}|${L}|${pid}`];return r?Object.assign({vistoRev:null,vistoIl:null,vistoSRev:null,vistoSIl:null},clone(r)):null},
+  async leggiRegistro(k,n,L,pid){const r=this.regLeggi()[`${k}|${n}|${L}|${pid}`];return r?Object.assign({vistoRev:null,vistoIl:null,vistoSRev:null,vistoSIl:null,rett:null},clone(r)):null},
   async salvaRegistro(k,n,L,pid,dati,baseRev,invia=false,forza=false){
     const all=this.regLeggi(),key=`${k}|${n}|${L}|${pid}`,ex=all[key],ts=new Date().toISOString(),base=baseRev===undefined?null:baseRev;
     let r;
@@ -67,7 +68,7 @@ const LocalAdapter={
       if(dati===null){r=ex;if(invia){r.inviatoRev=r.rev;r.inviatoIl=ts}}
       else{
         if(!forza&&base!==ex.rev)return{ok:false,conflitto:true,attuale:ex.rev};
-        r={dati:clone(dati),rev:ex.rev+1,inviatoRev:invia?ex.rev+1:ex.inviatoRev,inviatoIl:invia?ts:ex.inviatoIl,agg:ts,vistoRev:ex.vistoRev===undefined?null:ex.vistoRev,vistoIl:ex.vistoIl||null,vistoSRev:ex.vistoSRev===undefined?null:ex.vistoSRev,vistoSIl:ex.vistoSIl||null};
+        r={dati:clone(dati),rev:ex.rev+1,inviatoRev:invia?ex.rev+1:ex.inviatoRev,inviatoIl:invia?ts:ex.inviatoIl,agg:ts,vistoRev:ex.vistoRev===undefined?null:ex.vistoRev,vistoIl:ex.vistoIl||null,vistoSRev:ex.vistoSRev===undefined?null:ex.vistoSRev,vistoSIl:ex.vistoSIl||null,rett:ex.rett||null};
       }
     }else{
       if(dati===null)return{ok:false,errore:'registro non ancora salvato'};
@@ -82,7 +83,7 @@ const LocalAdapter={
   async registriTurno(k,n,L){
     const all=this.regLeggi(),o=[];
     for(const key of Object.keys(all)){const[kk,nn,ll,pid]=key.split('|');
-      if(kk===k&&+nn===n&&ll===L){const r=all[key];o.push({personaId:+pid,rev:r.rev,inviatoRev:r.inviatoRev,inviatoIl:r.inviatoIl,vistoRev:r.vistoRev===undefined?null:r.vistoRev,vistoIl:r.vistoIl||null,vistoSRev:r.vistoSRev===undefined?null:r.vistoSRev,vistoSIl:r.vistoSIl||null,dati:clone(r.dati)})}}
+      if(kk===k&&+nn===n&&ll===L){const r=all[key];o.push({personaId:+pid,rev:r.rev,inviatoRev:r.inviatoRev,inviatoIl:r.inviatoIl,vistoRev:r.vistoRev===undefined?null:r.vistoRev,vistoIl:r.vistoIl||null,vistoSRev:r.vistoSRev===undefined?null:r.vistoSRev,vistoSIl:r.vistoSIl||null,rett:r.rett?clone(r.rett):null,dati:clone(r.dati)})}}
     return o;
   },
   async vistaRegistro(k,n,L,pid,togli=false,come=null){
@@ -92,6 +93,20 @@ const LocalAdapter={
     if(togli){r[fr]=null;r[fi]=null}else{r[fr]=r.inviatoRev;r[fi]=new Date().toISOString()}
     try{localStorage.setItem(this.LSR,JSON.stringify(all))}catch(e){return{ok:false,errore:'memoria del browser non disponibile'}}
     return{ok:true,vistoRev:r[fr],vistoIl:r[fi]};
+  },
+  /* Rettifica dei totali (V00.14.2): salvata a parte, vale per la revisione inviata. Minuti interi; rep/str null = non rettificato. */
+  async rettificaRegistro(k,n,L,pid,v,togli=false){
+    const all=this.regLeggi(),key=`${k}|${n}|${L}|${pid}`,r=all[key];
+    if(!r||r.inviatoRev===null||r.inviatoRev===undefined)return{ok:false,errore:'il registro non risulta inviato'};
+    if(togli)r.rett=null;
+    else{
+      v=v||{};const rep=v.rep==null?null:v.rep,str=v.str==null?null:v.str,mt=String(v.motivo||'').trim();
+      if(rep===null&&str===null)return{ok:false,errore:'indica almeno un totale da rettificare'};
+      if(mt.length<5)return{ok:false,errore:'la motivazione è obbligatoria (almeno 5 caratteri)'};
+      r.rett={rep,str,motivo:mt,da:null,chi:v.chi||'',il:new Date().toISOString(),rev:r.inviatoRev};
+    }
+    try{localStorage.setItem(this.LSR,JSON.stringify(all))}catch(e){return{ok:false,errore:'memoria del browser non disponibile'}}
+    return{ok:true,rett:r.rett?clone(r.rett):null};
   },
   async inviaMail(){return{ok:false,nonDisponibile:true,errore:'le mail non sono disponibili con l’archivio locale'}},
   async importa(M,A){

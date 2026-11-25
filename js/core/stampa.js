@@ -41,7 +41,12 @@ function stTabRegistro(L,righe){
   return `<table class="st-pt${ST_CG[L]?' st-pc':''}">${cg}<thead><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>${corpo}</tbody></table>`;
 }
 /* rows: [[etichetta giorno 'gg/mm/aaaa', minuti]]; tot: minuti */
-const stTabRiep=(nome,rows,tot)=>`<table class="st-rt2"><thead><tr><th>NOMINATIVO DIPENDENTE</th><th>GIORNI</th><th>ORE</th></tr></thead><tbody>${rows.map((r,i)=>`<tr>${i===0?`<td class="nm" rowspan="${rows.length+1}">${esc(nome)}</td>`:''}<td class="dt">${esc(r[0])}</td><td class="dt">${stHm(r[1])}</td></tr>`).join('')}<tr class="tot"><td>TOTALE ORE</td><td>${stHm(tot)}</td></tr></tbody></table>`;
+const stTabRiep=(nome,rows,tot,rett)=>`<table class="st-rt2"><thead><tr><th>NOMINATIVO DIPENDENTE</th><th>GIORNI</th><th>ORE</th></tr></thead><tbody>${rows.map((r,i)=>`<tr>${i===0?`<td class="nm" rowspan="${rows.length+1}">${esc(nome)}</td>`:''}<td class="dt">${esc(r[0])}</td><td class="dt">${stHm(r[1])}</td></tr>`).join('')}<tr class="tot"><td>TOTALE ORE</td><td>${stHm(rett!=null?rett:tot)}${rett!=null?'*':''}</td></tr></tbody></table>`;
+/* Nota sulla rettifica del supervisore (V00.14.2): t={rep,str,repOrig,strOrig,motivo,chi,il} */
+const stNotaRett=t=>{if(!t||(t.rep==null&&t.str==null))return '';const p=[];
+  if(t.rep!=null)p.push(`reperibilità: calcolato ${stHm(t.repOrig)}, rettificato ${stHm(t.rep)}`);
+  if(t.str!=null)p.push(`straordinario: calcolato ${stHm(t.strOrig)}, rettificato ${stHm(t.str)}`);
+  return `<p class="st-rn">* Totali rettificati dal supervisore${t.chi?' '+esc(t.chi):''}${t.il?' il '+esc(t.il):''} (${p.join('; ')}). Motivazione: ${esc(t.motivo)}</p>`};
 /* corsivo: firma in corsivo (nome e cognome); visto: data 'gg/mm/aaaa' di approvazione */
 const stFirma=(etichetta,n,corsivo,visto,p)=>`<div>${etichetta}</div><div><b>${esc(n||'')}</b></div><div class="fi">Firma<i>${corsivo&&n?`<b class="sig">${esc(stNomeCognome(n,p))}</b>`:''}</i>${visto?`<span class="vi">visto il ${esc(visto)}</span>`:''}</div>`;
 
@@ -50,13 +55,13 @@ const Stampa={
            rep:{rows,tot}, str:{rows,tot}, vistoC?, vistoS? } */
   addetto(o){
     return `<section class="st-pp st-p1">${stHead(o.D,'A')}<p class="st-pm"><b>${ST_RUOLO.A.reg}</b> · ${esc(o.nome)} · turno dal ${esc(o.da)} al ${esc(o.a)}</p>${stTabRegistro('A',o.righe)}</section>`
-     +`<section class="st-pp st-p2">${stHead(o.D,'A')}<p class="st-rp">${stT1(o.nome)}</p>${stTabRiep(o.nome,o.rep.rows,o.rep.tot)}<p class="st-rp">${ST_T2}</p>${stTabRiep(o.nome,o.str.rows,o.str.tot)}`
+     +`<section class="st-pp st-p2">${stHead(o.D,'A')}<p class="st-rp">${stT1(o.nome)}</p>${stTabRiep(o.nome,o.rep.rows,o.rep.tot,o.rett&&o.rett.rep)}<p class="st-rp">${ST_T2}</p>${stTabRiep(o.nome,o.str.rows,o.str.tot,o.rett&&o.rett.str)}${stNotaRett(o.rett)}`
      +`<div class="st-sg">${stFirma('L’ADDETTO',o.nome,true,null,o.persona)}${stFirma('IL COORDINATORE',o.coordinatore,!!o.vistoC,o.vistoC)}${stFirma('IL SUPERVISORE',o.supervisore,!!o.vistoS,o.vistoS)}</div></section>`;
   },
   /* righe: [[17 celle]] */
   coordinatore(o){
     return `<section class="st-pp st-p1">${stHead(o.D,'C')}<p class="st-pm"><b>${ST_RUOLO.C.reg}</b> · ${esc(o.nome)} · turno dal ${esc(o.da)} al ${esc(o.a)}</p>${stTabRegistro('C',o.righe)}</section>`
-     +`<section class="st-pp st-p2">${stHead(o.D,'C')}<p class="st-rp">${stT1(o.nome)}</p>${stTabRiep(o.nome,o.rep.rows,o.rep.tot)}<p class="st-rp">${ST_T2}</p>${stTabRiep(o.nome,o.str.rows,o.str.tot)}`
+     +`<section class="st-pp st-p2">${stHead(o.D,'C')}<p class="st-rp">${stT1(o.nome)}</p>${stTabRiep(o.nome,o.rep.rows,o.rep.tot,o.rett&&o.rett.rep)}<p class="st-rp">${ST_T2}</p>${stTabRiep(o.nome,o.str.rows,o.str.tot,o.rett&&o.rett.str)}${stNotaRett(o.rett)}`
      +`<div class="st-sg">${stFirma('IL COORDINATORE',o.nome,true,null,o.persona)}${stFirma('IL SUPERVISORE',o.supervisore,!!o.vistoS,o.vistoS)}</div></section>`;
   },
   /* righe: [[14 celle]]; dirigente: nome del dirigente (firma senza corsivo) */
@@ -73,11 +78,11 @@ const Stampa={
     const testa=`<p class="a">PROVINCIA DI PISA</p><p class="b">SETTORE VIABILITÀ, TRASPORTI E PROTEZIONE CIVILE</p><img src="${LOGO}" alt="">`
      +`<p class="c">SERVIZIO DI REPERIBILITÀ</p><p class="d">Turno dalle ore 00:00 del <b>${esc(o.da)}</b> alle ore 23:59:59 del <b>${esc(o.a)}</b></p><div class="rl"></div>`;
     if(T&&T.length){
-      const hm=v=>v==null?'—':stHm(v),ha=r=>r.rep!=null&&r.str!=null,
+      const hm=v=>v==null?'—':stHm(v),ha=r=>r.rep!=null&&r.str!=null,rt=r=>r.rr||r.rs,
         sr=T.reduce((t,r)=>t+(r.rep||0),0),ss=T.reduce((t,r)=>t+(r.str||0),0);
       return `<section class="st-pp st-p2 st-cv st-cvt">${testa}<table class="st-cp"><thead><tr><th>Ruolo</th><th>Nominativo</th><th>Ore reperibilità</th><th>Ore straordinario</th><th>Totale ore</th></tr></thead><tbody>`
-       +T.map(r=>`<tr><td class="ru">${esc(r.ruolo)}</td><td class="nm">${esc(r.nome||'—')}</td><td>${hm(r.rep)}</td><td>${hm(r.str)}</td><td>${ha(r)?stHm(r.rep+r.str):'—'}</td></tr>`).join('')
-       +`<tr class="tot"><td colspan="2">TOTALE</td><td>${stHm(sr)}</td><td>${stHm(ss)}</td><td>${stHm(sr+ss)}</td></tr></tbody></table></section>`;
+       +T.map(r=>`<tr><td class="ru">${esc(r.ruolo)}</td><td class="nm">${esc(r.nome||'—')}</td><td>${hm(r.rep)}${r.rr?'*':''}</td><td>${hm(r.str)}${r.rs?'*':''}</td><td>${ha(r)?stHm(r.rep+r.str)+(rt(r)?'*':''):'—'}</td></tr>`).join('')
+       +`<tr class="tot"><td colspan="2">TOTALE</td><td>${stHm(sr)}</td><td>${stHm(ss)}</td><td>${stHm(sr+ss)}</td></tr></tbody></table>${T.some(rt)?'<p class="st-cpn">* Valore rettificato dal supervisore (motivazione nel report della persona).</p>':''}</section>`;
     }
     return `<section class="st-pp st-p2 st-cv">${testa}`
      +`<div class="el"><div class="r">Supervisore</div><div class="n">${esc(o.supervisore||'—')}</div><div class="r">Coordinatore</div><div class="n">${esc(o.coordinatore||'—')}</div>`

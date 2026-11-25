@@ -71,26 +71,38 @@ const SupabaseAdapter={
     if(this.utente&&this.utente.id===id)this.utente.personaId=personaId;
     return{ok:true};
   },
-  /* Registri (V00.10): {dati, rev, inviatoRev, inviatoIl, agg} oppure null se non ancora salvato */
-  async leggiRegistro(k,n,L,pid){
-    let r;
-    const q=cols=>this.sb.from('registri').select(cols).eq('mese',k).eq('turno',n).eq('ruolo',L).eq('persona_id',pid).maybeSingle();
-    try{r=await q('dati,rev,inviato_rev,inviato_il,agg,visto_rev,visto_il,visto_sup_rev,visto_sup_il')
-      if(r.error&&/visto_sup/.test(r.error.message||''))r=await q('dati,rev,inviato_rev,inviato_il,agg,visto_rev,visto_il')   /* script SQL V00.14.1 non ancora eseguito */
-      if(r.error&&/visto_/.test(r.error.message||''))r=await q('dati,rev,inviato_rev,inviato_il,agg')}   /* script SQL V00.13 non ancora eseguito */
-    catch(x){const e=new Error(x.message||String(x));e.rete=true;throw e}
-    if(r.error){const e=new Error(r.error.message);e.rete=erroreRete(r.error);throw e}
-    const d=r.data;return d?{dati:d.dati,rev:d.rev,inviatoRev:d.inviato_rev,inviatoIl:d.inviato_il,agg:d.agg,vistoRev:d.visto_rev===undefined?null:d.visto_rev,vistoIl:d.visto_il||null,vistoSRev:d.visto_sup_rev===undefined?null:d.visto_sup_rev,vistoSIl:d.visto_sup_il||null}:null;
+  /* Colonne da leggere, dalla più completa alla più vecchia: se lo script SQL più recente non è stato eseguito
+     (colonna inesistente) si ripiega sulla versione precedente, così l'app continua a funzionare. */
+  _colonne(prefisso){
+    const base='dati,rev,inviato_rev,inviato_il',v13='visto_rev,visto_il',v14='visto_sup_rev,visto_sup_il',v142='rett';
+    return [[base,'agg',v13,v14,v142],[base,'agg',v13,v14],[base,'agg',v13],[base,'agg']].map(a=>prefisso+a.join(','));
   },
-  /* Registri inviati di un turno per ruolo, con il visto (V00.13). Lancia un errore se la lettura non riesce. */
-  async registriTurno(k,n,L){
+  async _leggi(costruisci,colonne){
     let r;
-    const q=cols=>this.sb.from('registri').select(cols).eq('mese',k).eq('turno',n).eq('ruolo',L);
-    try{r=await q('persona_id,dati,rev,inviato_rev,inviato_il,visto_rev,visto_il,visto_sup_rev,visto_sup_il')
-      if(r.error&&/visto_sup/.test(r.error.message||''))r=await q('persona_id,dati,rev,inviato_rev,inviato_il,visto_rev,visto_il')}   /* script SQL V00.14.1 non ancora eseguito */
+    try{for(const c of colonne){r=await costruisci(c);if(!(r.error&&/visto_|rett|does not exist|schema cache/i.test(r.error.message||'')))break}}
     catch(x){const e=new Error(x.message||String(x));e.rete=true;throw e}
+    return r;
+  },
+  /* Registri (V00.10): {dati, rev, inviatoRev, inviatoIl, agg, visti, rett} oppure null se non ancora salvato */
+  async leggiRegistro(k,n,L,pid){
+    const r=await this._leggi(cols=>this.sb.from('registri').select(cols).eq('mese',k).eq('turno',n).eq('ruolo',L).eq('persona_id',pid).maybeSingle(),this._colonne(''));
+    if(r.error){const e=new Error(r.error.message);e.rete=erroreRete(r.error);throw e}
+    const d=r.data;return d?{dati:d.dati,rev:d.rev,inviatoRev:d.inviato_rev,inviatoIl:d.inviato_il,agg:d.agg,vistoRev:d.visto_rev===undefined?null:d.visto_rev,vistoIl:d.visto_il||null,vistoSRev:d.visto_sup_rev===undefined?null:d.visto_sup_rev,vistoSIl:d.visto_sup_il||null,rett:d.rett||null}:null;
+  },
+  /* Registri inviati di un turno per ruolo, con i visti e la rettifica (V00.13, V00.14.1, V00.14.2). Lancia un errore se la lettura non riesce. */
+  async registriTurno(k,n,L){
+    const r=await this._leggi(cols=>this.sb.from('registri').select(cols).eq('mese',k).eq('turno',n).eq('ruolo',L),this._colonne('persona_id,'));
     if(r.error){const e=new Error(r.error.message+(/visto_/.test(r.error.message)?' (lo script SQL V00.13 è stato eseguito?)':''));e.rete=erroreRete(r.error);throw e}
-    return (r.data||[]).map(d=>({personaId:d.persona_id,rev:d.rev,inviatoRev:d.inviato_rev,inviatoIl:d.inviato_il,vistoRev:d.visto_rev,vistoIl:d.visto_il,vistoSRev:d.visto_sup_rev===undefined?null:d.visto_sup_rev,vistoSIl:d.visto_sup_il||null,dati:d.dati}));
+    return (r.data||[]).map(d=>({personaId:d.persona_id,rev:d.rev,inviatoRev:d.inviato_rev,inviatoIl:d.inviato_il,vistoRev:d.visto_rev===undefined?null:d.visto_rev,vistoIl:d.visto_il||null,vistoSRev:d.visto_sup_rev===undefined?null:d.visto_sup_rev,vistoSIl:d.visto_sup_il||null,rett:d.rett||null,dati:d.dati}));
+  },
+  /* Rettifica dei totali (minuti) di un registro inviato, o sua revoca con togli=true (V00.14.2). Solo supervisore del turno e admin. */
+  async rettificaRegistro(k,n,L,pid,v,togli=false){
+    let r;v=v||{};
+    try{r=await this.sb.rpc('rettifica_registro',{p_mese:k,p_turno:n,p_ruolo:L,p_persona:pid,p_rep:v.rep==null?null:v.rep,p_str:v.str==null?null:v.str,p_motivo:v.motivo||null,p_togli:!!togli})}
+    catch(x){return{ok:false,errore:x.message||String(x),rete:true}}
+    if(r.error)return{ok:false,errore:r.error.message+(/does not exist|schema cache/i.test(r.error.message)?' (lo script SQL V00.14.2 è stato eseguito?)':''),rete:erroreRete(r.error)};
+    const d=r.data;if(!d.ok)return d;
+    return{ok:true,rett:d.rett||null};
   },
   /* Visto del responsabile sul registro inviato (o sua revoca con togli=true). */
   async vistaRegistro(k,n,L,pid,togli=false,come=null){

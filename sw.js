@@ -1,7 +1,7 @@
-/* Service worker V00.14.1: l'app si apre anche senza rete.
+/* Service worker V00.14.2: l'app si apre anche senza rete.
    Rete per prima (si vede sempre l'ultima versione), copia salvata come ripiego.
    I dati (Supabase) non passano mai da qui: la copia dei turni la gestisce l'adattatore. */
-const V='V00.14.1',CACHE='turni-'+V;
+const V='V00.14.2',CACHE='turni-'+V;
 const SHELL=['./','index.html','manifest.webmanifest','css/tema.css','css/turni.css','css/stampa.css','js/config.js','js/supabase.config.js',
   'js/core/util.js','js/core/store.js','js/core/supabase.js','js/core/logo.js','js/core/stampa.js','js/core/mail.js','js/core/accessi.js','js/core/ore.js','js/core/verifiche.js','js/moduli/anagrafica.js','js/moduli/utenti.js','js/moduli/mail.js','js/moduli/registro.js','js/moduli/ruoli.js','js/moduli/help.js','js/moduli/turni.js','js/app.js',
   'icons/icon-192.png','icons/icon-512.png'];

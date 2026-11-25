@@ -207,3 +207,16 @@ code{font:.85em ui-monospace,Menlo,Consolas,monospace;background:var(--bg);paddi
 .rg-comp th{font-size:.82rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600}
 .rg-comp .num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
 .rg-comp tr.tot td{font-weight:700;border-top:2px solid var(--line);border-bottom:0;background:var(--sage-l)}
+
+/* V00.14.2 · rettifica dei totali da parte del supervisore */
+.rg-rt{margin:10px 0 0;padding:9px 12px;border-left:3px solid var(--sage);background:var(--sage-l);border-radius:8px;font-size:.9rem;line-height:1.45}
+.rg-rt.dec{border-left-color:var(--warm);background:var(--warm-l)}
+.rg-rf{margin:10px 0 0;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.rg-rf h4{margin:0 0 10px;font:600 1rem var(--sans)}
+.rg-rf label{display:block;font-size:.85rem;color:var(--muted);margin-bottom:8px}
+.rg-rf input,.rg-rf textarea{display:block;width:100%;box-sizing:border-box;margin-top:4px;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.rg-rf .hint{margin:4px 0 10px;font-size:.85rem;color:var(--muted)}
+@media (max-width:560px){
+  .rg-comp th,.rg-comp td{padding:6px 5px;font-size:.8rem}
+  .rg-comp th{font-size:.64rem;letter-spacing:0}
+}

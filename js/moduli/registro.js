@@ -41,7 +41,7 @@ const rgSistema=d=>{d=d&&typeof d==='object'?d:{};d.righe=Array.isArray(d.righe)
 
 /* ---------- caricamento ---------- */
 async function rgApri(c,rerender){
-  const key=rgK(c),s={stato:'cic',dati:rgVuoto(),baseRev:null,rev:null,inviatoRev:null,inviatoIl:null,vistoRev:null,vistoIl:null,vistoSRev:null,vistoSIl:null,dirty:false,msg:'',err:'',bozza:null,conflitto:false,attuale:null,salvando:false};
+  const key=rgK(c),s={stato:'cic',dati:rgVuoto(),baseRev:null,rev:null,inviatoRev:null,inviatoIl:null,vistoRev:null,vistoIl:null,vistoSRev:null,vistoSIl:null,rett:null,dirty:false,msg:'',err:'',bozza:null,conflitto:false,attuale:null,salvando:false};
   RG.key=key;RG.ctx=c;RG.s=s;
   let db=null,rete=false,errore='';
   try{db=await Store.leggiRegistro(c.k,c.n,c.L,c.p.id)}catch(e){rete=!!e.rete||!navigator.onLine;errore=e.message||String(e)}
@@ -52,7 +52,7 @@ async function rgApri(c,rerender){
     else{s.stato='err';s.err=rete?'Registro non raggiungibile: senza connessione si può aprire solo se c’è una bozza su questo dispositivo.':'Lettura del registro non riuscita: '+errore+' (lo script SQL V00.10 è stato eseguito?)'}
   }else{
     s.stato='ok';
-    if(db){s.dati=rgSistema(db.dati);s.baseRev=db.rev;s.rev=db.rev;s.inviatoRev=db.inviatoRev;s.inviatoIl=db.inviatoIl;s.vistoRev=db.vistoRev===undefined?null:db.vistoRev;s.vistoIl=db.vistoIl||null;s.vistoSRev=db.vistoSRev===undefined?null:db.vistoSRev;s.vistoSIl=db.vistoSIl||null}
+    if(db){s.dati=rgSistema(db.dati);s.baseRev=db.rev;s.rev=db.rev;s.inviatoRev=db.inviatoRev;s.inviatoIl=db.inviatoIl;s.vistoRev=db.vistoRev===undefined?null:db.vistoRev;s.vistoIl=db.vistoIl||null;s.vistoSRev=db.vistoSRev===undefined?null:db.vistoSRev;s.vistoSIl=db.vistoSIl||null;s.rett=db.rett||null}
     if(bz&&JSON.stringify(rgSistema(bz.dati))!==JSON.stringify(s.dati))s.bozza=bz;
     else if(bz)rgBozzaSalva(key,null);
   }
@@ -127,10 +127,12 @@ function rgIncrociate(){
   return{stato:'ok',lista:verificaIncrociata(RG.s.dati.righe,ad.lista.map(x=>({id:x.id,n:x.n,reg:sommario(x.id?ad.regs[x.id]:null)})))};
 }
 /* Totali (minuti) di reperibilità e straordinario dal riepilogo di una persona, correzioni manuali comprese: gli stessi numeri del PDF. */
-function rgTotaliPers(c,pers,L,dati){
+function rgTotaliPers(c,pers,L,dati,rett){
   const eff=riepilogoEffettivo(riepilogoAuto({ruolo:L,p:pers,k:c.k,n:c.n,a:c.a,b:c.b,righe:dati.righe}),dati.ov||{});
   const tot=k=>eff.filter(x=>x.inc).reduce((t,x)=>t+Math.round(x[k]*60),0);
-  return{rep:tot('rep'),str:tot('str')};
+  const o={rep:tot('rep'),str:tot('str'),rr:false,rs:false};o.cRep=o.rep;o.cStr=o.str;   /* cRep/cStr = valori calcolati dal riepilogo */
+  if(rett){if(rett.rep!=null){o.rep=rett.rep;o.rr=true}if(rett.str!=null){o.str=rett.str;o.rs=true}}   /* V00.14.2: rettifica del supervisore */
+  return o;
 }
 /* Composizione del turno con i totali di ciascuno (V00.14.1, scheda Supervisore): [{ruolo,nome,rep,str,nota}] in minuti.
    rep/str = null se la persona non ha un registro inviato (non entra nei totali). */
@@ -140,7 +142,7 @@ function rgComposizione(){
   const riga=(ruolo,x,g,L)=>{
     if(!x.id||!inviato(g))return{ruolo,nome:x.n,rep:null,str:null,nota:!x.id?'non è nell’anagrafica':'registro non inviato'};
     const pers=ANAG.find(p=>p.id===x.id)||{id:x.id,n:x.n};
-    return Object.assign({ruolo,nome:x.n,nota:''},rgTotaliPers(c,pers,L,{righe:(g.dati&&g.dati.righe)||[],ov:(g.dati&&g.dati.ov)||{}}));
+    return Object.assign({ruolo,nome:x.n,nota:g.rett&&!rgRettValida(g)?'rettifica da riconfermare (registro rinviato)':''},rgTotaliPers(c,pers,L,{righe:(g.dati&&g.dati.righe)||[],ov:(g.dati&&g.dati.ov)||{}},rgRettValida(g)?g.rett:null));
   };
   const o=[Object.assign({ruolo:'Supervisore',nome:c.p.n,nota:''},rgTotaliPers(c,c.p,'S',RG.s.dati))],vice=c.tt&&c.tt.VICE;
   for(const x of ad.coords)o.push(riga('Coordinatore',x,x.id?ad.regsC[x.id]:null,'C'));
@@ -154,8 +156,8 @@ function rgTabComposizione(){
   return `<div class="sec" style="margin-top:12px"><h3>Composizione del turno e ore</h3>
     <p style="color:var(--muted);margin:0 0 12px;font-size:.9rem">Le ore vengono dal riepilogo di ciascuno (correzioni manuali comprese). Chi non ha ancora inviato il registro compare con «—» e non entra nei totali. È la tabella che trovi nella copertina del fascicolo completo.</p>
     <div class="tw"><table class="rg-comp"><thead><tr><th>Ruolo</th><th>Nominativo</th><th class="num">Ore reperibilità</th><th class="num">Ore straordinario</th><th class="num">Totale ore</th></tr></thead><tbody>${
-      T.map(r=>`<tr><td>${esc(r.ruolo)}</td><td><b>${esc(r.nome||'—')}</b>${r.nota?`<br><small class="mod">${esc(r.nota)}</small>`:''}</td><td class="num">${hm(r.rep)}</td><td class="num">${hm(r.str)}</td><td class="num">${r.rep==null?'—':fmtHM(r.rep+r.str)}</td></tr>`).join('')
-    }<tr class="tot"><td colspan="2">TOTALE</td><td class="num">${fmtHM(sr)}</td><td class="num">${fmtHM(ss)}</td><td class="num">${fmtHM(sr+ss)}</td></tr></tbody></table></div></div>`;
+      T.map(r=>`<tr><td>${esc(r.ruolo)}</td><td><b>${esc(r.nome||'—')}</b>${r.nota?`<br><small class="mod">${esc(r.nota)}</small>`:''}</td><td class="num">${hm(r.rep)}${r.rr?'*':''}</td><td class="num">${hm(r.str)}${r.rs?'*':''}</td><td class="num">${r.rep==null?'—':fmtHM(r.rep+r.str)+(r.rr||r.rs?'*':'')}</td></tr>`).join('')
+    }<tr class="tot"><td colspan="2">TOTALE</td><td class="num">${fmtHM(sr)}</td><td class="num">${fmtHM(ss)}</td><td class="num">${fmtHM(sr+ss)}</td></tr></tbody></table></div>${T.some(r=>r.rr||r.rs)?'<p style="margin:8px 0 0;font-size:.85rem;color:var(--muted)">* Valore rettificato dal supervisore (vedi «Rettifica» nell’elenco qui sopra e il report della persona).</p>':''}</div>`;
 }
 /* Fascicolo: C = coordinatore + addetti che hanno inviato; S = copertina + supervisore + coordinatore + addetti (ciascuno con il proprio «visto»). */
 function rgFascicolo(){
@@ -199,6 +201,7 @@ function rgSetOre(g,campo,v,el){
 }
 RG.onInput=function(e){
   const t=e.target,s=RG.s;if(!s||s.stato!=='ok'||RG.ctx.sola)return;
+  if(t.dataset.rt!==undefined){if(RG.ad&&RG.ad.rf)RG.ad.rf[t.dataset.rt]=t.value;return}   /* modulo di rettifica: nessun ricalcolo */
   if(t.dataset.f!==undefined&&t.dataset.i!==undefined&&t.type!=='checkbox')rgSetRiga(+t.dataset.i,t.dataset.f,t.value);
   else if(t.dataset.c==='rep'||t.dataset.c==='str')rgSetOre(t.dataset.g,t.dataset.c,t.value,t);
 };
@@ -233,6 +236,11 @@ RG.onClick=async function(b,rerender){
   }
   if(a==='avvisa'){await rgAvvisa(rerender);return}
   if(a==='adApri'){const a0=RG.ad;if(a0)a0.aperto=a0.aperto===+b.dataset.id?null:+b.dataset.id;rerender();return}
+  if(a==='rtApri'){rgRtApri(+b.dataset.id,b.dataset.ru||'A',rerender);return}
+  if(a==='rtAnnulla'){if(RG.ad)RG.ad.rf=null;rerender();return}
+  if(a==='rtSalva'){await rgRtSalva(rerender);return}
+  if(a==='rtTogli'){await rgRtTogli(rerender);return}
+  if(a==='rtRiconferma'){await rgRtRiconferma(+b.dataset.id,b.dataset.ru||'A',rerender);return}
   if(a==='adVisto'||a==='adTogli'){await rgAdVisto(+b.dataset.id,a==='adTogli',rerender,b.dataset.ru||'A');return}
   if(a==='adReport'){const a0=RG.ad;if(a0){a0.report={id:+b.dataset.id,L:b.dataset.ru||'A'};rerender();window.scrollTo(0,0)}return}
   if(a==='adReportChiudi'){const a0=RG.ad;if(a0){a0.report=null;rerender()}return}
@@ -247,7 +255,11 @@ RG.onClick=async function(b,rerender){
 
 /* ---------- PDF (grafica V05.20, vedi core/stampa.js) ---------- */
 /* Dati per il motore di stampa di un registro (anche di un altro: c.p e c.L dicono di chi e di che ruolo). */
-function rgStampaDati(c,dati,rev,vistoDmy,vistoSDmy){
+/* Rettifica del supervisore (V00.14.2): vale solo per la revisione inviata (rett.rev = inviatoRev); altrimenti è «da riconfermare» e non si applica. */
+const rgRettValida=g=>!!g&&!!g.rett&&g.inviatoRev!==null&&g.inviatoRev!==undefined&&g.rett.rev===g.inviatoRev;
+/* «112», «112:30» → minuti (fino a 1240 ore); null se il formato non è valido */
+const rgParseTot=t=>{const m=/^(\d{1,4})(?::([0-5]\d))?$/.exec(String(t).trim());if(!m)return null;const v=(+m[1])*60+(+(m[2]||0));return v<=74400?v:null};
+function rgStampaDati(c,dati,rev,vistoDmy,vistoSDmy,rett){
   const eff=riepilogoEffettivo(riepilogoAuto({ruolo:c.L,p:c.p,k:c.k,n:c.n,a:c.a,b:c.b,righe:dati.righe}),dati.ov||{}),[y,m]=c.k.split('-').map(Number);
   const rows=k=>eff.filter(x=>x.inc).map(x=>[it(parse(x.g)),Math.round(x[k]*60)]);   /* ore → minuti interi */
   const tot=k=>rows(k).reduce((t,r)=>t+r[1],0);
@@ -259,9 +271,10 @@ function rgStampaDati(c,dati,rev,vistoDmy,vistoSDmy){
       ?[String(i+1),r.data?it(parse(r.data)):'',r.ora||'',r.rich||'',r.via||'',r.km||'',r.motivo||'',r.tipo||'',rgAddettiTesto(r),r.arrivo||'',r.fine||'',r.imprese||'',r.sopr||'',r.soprSup||'',r.effic||'',r.durata||'',r.note||'']
       :[String(i+1),r.data?it(parse(r.data)):'',r.ora||'',r.rich||'',r.via||'',r.km||'',r.motivo||'',r.arrivo||'',r.descr||'',r.fine||'',r.durata||'',r.note||'']),
     rep:{rows:rows('rep'),tot:tot('rep')},str:{rows:rows('str'),tot:tot('str')},
+    rett:rett?{rep:rett.rep==null?null:rett.rep,str:rett.str==null?null:rett.str,repOrig:tot('rep'),strOrig:tot('str'),motivo:rett.motivo||'',chi:rett.chi||'',il:rett.il?rgDmy(rett.il):''}:null,
     ...(c.L==='S'?{dirigente:CONFIG.dirigente||''}:c.L==='C'?{vistoS:vistoDmy||''}:{vistoC:vistoDmy||'',vistoS:vistoSDmy||''})};
 }
-function rgDatiStampa(){return rgStampaDati(RG.ctx,RG.s.dati,RG.s.rev,rgVistoValido()?rgDmy(RG.s.vistoIl):'',rgVistoSValido()?rgDmy(RG.s.vistoSIl):'')}
+function rgDatiStampa(){return rgStampaDati(RG.ctx,RG.s.dati,RG.s.rev,rgVistoValido()?rgDmy(RG.s.vistoIl):'',rgVistoSValido()?rgDmy(RG.s.vistoSIl):'',rgRettValida(RG.s)?RG.s.rett:null)}
 const rgAddettiTesto=r=>[...(r.addetti||[]).map(x=>x.n),...(r.addettiAltri&&r.addettiAltri.trim()?[r.addettiAltri.trim()]:[])].join(', ');
 function rgPdf(){
   const c=RG.ctx,o=rgDatiStampa();
@@ -321,6 +334,14 @@ function rgViewRegistro(){
       <div class="tool">${ed?'<button class="go" data-rg="add">Aggiungi intervento</button><button class="ghost" data-rg="ordina">Ordina per data e ora</button>':''}<span class="sp"></span>
         <span style="color:var(--muted);font-size:.9rem">Interventi: ${s.dati.righe.length} · ${c.L!=='A'?'impegno totale':'durata totale'} ${fmtHM(tot)}</span></div></div>${rgNav(2)}`;
 }
+/* Avviso alla persona: il supervisore ha rettificato i suoi totali (V00.14.2) */
+function rgAvvisoRett(c){
+  const s=RG.s;if(!rgRettValida(s)||c.L==='S')return '';
+  const t=s.rett,o=rgTotaliPers(c,c.p,c.L,s.dati,null),parti=[];
+  if(t.rep!=null)parti.push(`reperibilità <b>${fmtHM(t.rep)}</b> (calcolato ${fmtHM(o.cRep)})`);
+  if(t.str!=null)parti.push(`straordinario <b>${fmtHM(t.str)}</b> (calcolato ${fmtHM(o.cStr)})`);
+  return `<div class="rg-rt"><b>Totali rettificati dal supervisore${t.chi?' '+esc(t.chi):''}${t.il?' il '+rgDmy(t.il):''}</b>: ${parti.join(' · ')}.<br>Motivazione: <i>${esc(t.motivo)}</i><br><small>Il riepilogo qui sotto resta quello da te inserito; i totali rettificati compaiono nel report e nella copertina del fascicolo.</small></div>`;
+}
 function rgViewRiepilogo(){
   const s=RG.s,c=RG.ctx,ed=!c.sola,eff=rgEff(),nome=c.p.n,C=c.L==='C',S=c.L==='S';
   const [y,m]=c.k.split('-').map(Number),vv=rgVistoValido()?rgDmy(s.vistoIl):'',vvS=rgVistoSValido()?rgDmy(s.vistoSIl):'';
@@ -335,7 +356,7 @@ function rgViewRiepilogo(){
     :C?stFirma('IL COORDINATORE',nome,true,null,c.p)+stFirma('IL SUPERVISORE',sup,!!vv,vv)
     :stFirma('L’ADDETTO',nome,true,null,c.p)+stFirma('IL COORDINATORE',coo,!!vv,vv)+stFirma('IL SUPERVISORE',sup,!!vvS,vvS);
   return `${rgTop()}${rgBanner()}
-    <div class="sec" style="margin-top:12px"><h3>Riepilogo del turno</h3>
+    <div class="sec" style="margin-top:12px"><h3>Riepilogo del turno</h3>${rgAvvisoRett(c)}
       <p style="color:var(--muted);margin:0 0 12px;font-size:.9rem">Precompilato dal turno e dal registro. Puoi correggere le ore (formato ore:minuti, es. 5:30), oppure togliere un giorno (es. malattia o permesso) con la casella. I valori corretti a mano sono evidenziati.</p>
       <div class="rg-doc">
         ${stHead({anno:y,mese:m,rev:s.rev},c.L)}
@@ -406,7 +427,7 @@ function rgAdReport(c,x,g,L='A'){
   const inv=g.inviatoRev!==null&&g.inviatoRev!==undefined,vv=inv&&g.vistoRev===g.inviatoRev&&g.vistoIl?rgDmy(g.vistoIl):'';
   const vvS=inv&&g.vistoSRev!==null&&g.vistoSRev!==undefined&&g.vistoSRev===g.inviatoRev&&g.vistoSIl?rgDmy(g.vistoSIl):'';
   const dati={righe:(g.dati&&g.dati.righe)||[],ov:(g.dati&&g.dati.ov)||{}};
-  return{html:(L==='C'?Stampa.coordinatore:Stampa.addetto)(rgStampaDati(c2,dati,g.rev,vv,vvS)),nomeFile:Stampa.nomeFile(L,{k:c.k,n:c.n,a:c.a,b:c.b,nome:pers.n,persona:pers,rev:g.rev})};
+  return{html:(L==='C'?Stampa.coordinatore:Stampa.addetto)(rgStampaDati(c2,dati,g.rev,vv,vvS,rgRettValida(g)?g.rett:null)),nomeFile:Stampa.nomeFile(L,{k:c.k,n:c.n,a:c.a,b:c.b,nome:pers.n,persona:pers,rev:g.rev})};
 }
 function rgAdDettaglio(c,x,g){
   const righe=g.dati&&g.dati.righe||[],pers=ANAG.find(p=>p.id===x.id);
@@ -418,6 +439,56 @@ function rgAdDettaglio(c,x,g){
     <p style="margin:8px 0 0;color:var(--muted);font-size:.9rem">Interventi: ${righe.length} · durata ${fmtHM(iv)}${eff.length?` · reperibilità ${totaleHM(eff,'rep')} · straordinario ${totaleHM(eff,'str')} (ore:minuti)`:''}</p></div>`;
 }
 
+/* Modulo di rettifica (V00.14.2): totali in h:mm; un campo lasciato uguale al calcolato non viene rettificato. */
+function rgRettForm(f,g){
+  return `<div class="rg-rf"><h4>Rettifica dei totali · ${esc(f.nome)}</h4>
+    <div class="grid2"><label>Totale reperibilità (h:mm)<input data-rt="rep" value="${esc(f.rep)}" inputmode="numeric" placeholder="h:mm" autocomplete="off"></label>
+    <label>Totale straordinario (h:mm)<input data-rt="str" value="${esc(f.str)}" inputmode="numeric" placeholder="h:mm" autocomplete="off"></label></div>
+    <p class="hint">Calcolati dal riepilogo della persona: reperibilità <b>${fmtHM(f.cRep)}</b> · straordinario <b>${fmtHM(f.cStr)}</b>. Il registro inviato non cambia: la rettifica è salvata a parte e compare nel report e nella copertina.</p>
+    <label>Motivazione (obbligatoria)<textarea data-rt="motivo" rows="2" maxlength="300" placeholder="Perché si forza il totale">${esc(f.motivo)}</textarea></label>
+    ${f.err?`<p class="err" role="alert">${esc(f.err)}</p>`:''}
+    <div class="tool"><button class="go mini" data-rg="rtSalva">Salva rettifica</button><button class="ghost mini" data-rg="rtAnnulla">Annulla</button>${g.rett?'<button class="mini" data-rg="rtTogli">Togli rettifica</button>':''}</div></div>`;
+}
+const rgRegDi=(ad,L,pid)=>(L==='C'?ad.regsC:ad.regs)[pid];
+function rgRtApri(pid,L,rerender){
+  const c=RG.ctx,ad=RG.ad;if(!ad||c.sola||c.L!=='S')return;
+  const x=(L==='C'?ad.coords:ad.lista).find(y=>y.id===pid),g=rgRegDi(ad,L,pid);if(!x||!g)return;
+  const pers=ANAG.find(p=>p.id===pid)||{id:pid,n:x.n},o=rgTotaliPers(c,pers,L,{righe:(g.dati&&g.dati.righe)||[],ov:(g.dati&&g.dati.ov)||{}},null),t=g.rett;
+  ad.rf={id:pid,L,nome:x.n,cRep:o.cRep,cStr:o.cStr,rep:fmtHM(t&&t.rep!=null?t.rep:o.cRep),str:fmtHM(t&&t.str!=null?t.str:o.cStr),motivo:t?t.motivo||'':'',err:''};
+  rerender();
+}
+async function rgRtSalva(rerender){
+  const c=RG.ctx,ad=RG.ad,f=ad&&ad.rf;if(!f||c.sola)return;
+  const rep=rgParseTot(f.rep),str=rgParseTot(f.str),mt=String(f.motivo||'').trim();
+  if(rep===null||str===null)f.err='Scrivi i totali come ore:minuti (es. 112:30).';
+  else if(rep===f.cRep&&str===f.cStr)f.err='Indica almeno un totale diverso da quello calcolato.';
+  else if(mt.length<5)f.err='La motivazione è obbligatoria (almeno 5 caratteri).';
+  else f.err='';
+  if(f.err){rerender();return}
+  const key=ad.key,r=await Store.rettificaRegistro(c.k,c.n,f.L,f.id,{rep:rep===f.cRep?null:rep,str:str===f.cStr?null:str,motivo:mt,chi:c.p.n},false);
+  if(!RG.ad||RG.ad.key!==key)return;
+  if(!r.ok){f.err='Rettifica non riuscita: '+(r.errore||'errore sconosciuto');rerender();return}
+  const g=rgRegDi(ad,f.L,f.id);if(g)g.rett=r.rett;
+  ad.rf=null;ad.msg='Rettifica registrata.';rerender();
+}
+async function rgRtTogli(rerender){
+  const c=RG.ctx,ad=RG.ad,f=ad&&ad.rf;if(!f||c.sola)return;
+  if(!confirm(`Togliere la rettifica dei totali di ${f.nome}? Torneranno i valori del suo riepilogo.`))return;
+  const key=ad.key,r=await Store.rettificaRegistro(c.k,c.n,f.L,f.id,null,true);
+  if(!RG.ad||RG.ad.key!==key)return;
+  if(!r.ok){f.err='Operazione non riuscita: '+(r.errore||'errore sconosciuto');rerender();return}
+  const g=rgRegDi(ad,f.L,f.id);if(g)g.rett=null;
+  ad.rf=null;ad.msg='Rettifica tolta.';rerender();
+}
+/* Riconferma: riapplica gli stessi valori e la stessa motivazione alla revisione inviata più recente */
+async function rgRtRiconferma(pid,L,rerender){
+  const c=RG.ctx,ad=RG.ad;if(!ad||c.sola||c.L!=='S')return;
+  const g=rgRegDi(ad,L,pid);if(!g||!g.rett)return;
+  const key=ad.key,t=g.rett,r=await Store.rettificaRegistro(c.k,c.n,L,pid,{rep:t.rep,str:t.str,motivo:t.motivo,chi:c.p.n},false);
+  if(!RG.ad||RG.ad.key!==key)return;
+  if(r.ok){g.rett=r.rett;ad.msg='Rettifica riconfermata.'}else ad.msg='Operazione non riuscita: '+(r.errore||'errore sconosciuto');
+  rerender();
+}
 /* Una riga dell'elenco: x = persona, g = suo registro, L = ruolo del registro, visto = può mettere il visto chi guarda.
    Sui registri degli addetti i visti sono due (coordinatore e supervisore); «mio» è quello di chi guarda. */
 function rgAdRiga(c,ad,x,g,L,visto){
@@ -443,8 +514,14 @@ function rgAdRiga(c,ad,x,g,L,visto){
   const mio=L==='A'&&come==='S'?vS:vC;                       /* il mio visto è valido? */
   if(mio)cl=' rg-ok';
   const sint=inv&&L==='A'?`<button class="mini" data-rg="adApri" data-id="${x.id}">${ad.aperto===x.id?'Chiudi':'Sintesi'}</button>`:'';
-  const az=inv?`${sint}<button class="mini" data-rg="adReport" data-id="${x.id}" data-ru="${L}">Apri report</button>${visto&&ed?(mio?`<button class="mini" data-rg="adTogli" data-id="${x.id}" data-ru="${L}">Togli visto</button>`:`<button class="go mini" data-rg="adVisto" data-id="${x.id}" data-ru="${L}">Visto</button>`):''}`:'';
-  return `<div class="rg-ad${cl}"><div class="rg-ad-h"><b>${esc(x.n)}</b><span class="rg-ad-s">${stato}</span><span class="sp"></span>${az}</div>${inv&&L==='A'&&ad.aperto===x.id?rgAdDettaglio(c,x,g):''}</div>`;
+  const rtOk=rgRettValida(g),rtDec=inv&&!!g.rett&&!rtOk,puoRett=c.L==='S'&&ed&&inv;
+  let rt='';
+  if(inv&&g.rett){const t=g.rett,parti=[t.rep!=null?`reperibilità ${fmtHM(t.rep)}`:'',t.str!=null?`straordinario ${fmtHM(t.str)}`:''].filter(Boolean).join(' · ');
+    rt=`<div class="rg-rt${rtOk?'':' dec'}"><b>${rtOk?'Totali rettificati':'Rettifica da riconfermare: la persona ha inviato una revisione nuova'}</b>: ${parti} — <i>${esc(t.motivo)}</i> <span class="mod">${t.chi?esc(t.chi)+', ':''}${t.il?rgDmy(t.il):''}</span>${rtDec&&puoRett?` <button class="go mini" data-rg="rtRiconferma" data-id="${x.id}" data-ru="${L}">Riconferma</button>`:''}</div>`}
+  const rf=ad.rf&&ad.rf.id===x.id&&ad.rf.L===L?rgRettForm(ad.rf,g):'';
+  const btnRt=puoRett?`<button class="mini" data-rg="rtApri" data-id="${x.id}" data-ru="${L}">${g.rett?'Modifica rettifica':'Rettifica totali'}</button>`:'';
+  const az=inv?`${sint}<button class="mini" data-rg="adReport" data-id="${x.id}" data-ru="${L}">Apri report</button>${btnRt}${visto&&ed?(mio?`<button class="mini" data-rg="adTogli" data-id="${x.id}" data-ru="${L}">Togli visto</button>`:`<button class="go mini" data-rg="adVisto" data-id="${x.id}" data-ru="${L}">Visto</button>`):''}`:'';
+  return `<div class="rg-ad${cl}"><div class="rg-ad-h"><b>${esc(x.n)}</b><span class="rg-ad-s">${stato}</span><span class="sp"></span>${az}</div>${inv&&L==='A'&&ad.aperto===x.id?rgAdDettaglio(c,x,g):''}${rt}${rf}</div>`;
 }
 function rgViewAddetti(){
   const c=RG.ctx,ad=RG.ad,S=c.L==='S';
