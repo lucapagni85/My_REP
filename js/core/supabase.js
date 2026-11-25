@@ -104,6 +104,48 @@ const SupabaseAdapter={
     const d=r.data;if(!d.ok)return d;
     return{ok:true,rett:d.rett||null};
   },
+  /* ---- Strumenti di amministrazione (V00.15): solo admin; le funzioni SQL controllano il ruolo ---- */
+  /* Tutti i registri (anche per il backup completo), a pagine di 500 */
+  async registriTutti(){
+    const colonne=this._colonne('mese,turno,ruolo,persona_id,').map(c=>c.replace('visto_il,','visto_il,visto_da,').replace('visto_sup_il,','visto_sup_il,visto_sup_da,'));
+    const out=[];
+    for(let da=0;;da+=500){
+      const r=await this._leggi(cols=>this.sb.from('registri').select(cols).order('id').range(da,da+499),colonne);
+      if(r.error){const e=new Error(r.error.message);e.rete=erroreRete(r.error);throw e}
+      for(const d of r.data||[])out.push({mese:d.mese,turno:d.turno,ruolo:d.ruolo,personaId:d.persona_id,rev:d.rev,inviatoRev:d.inviato_rev,inviatoIl:d.inviato_il,
+        vistoRev:d.visto_rev===undefined?null:d.visto_rev,vistoIl:d.visto_il||null,vistoDa:d.visto_da||null,vistoSRev:d.visto_sup_rev===undefined?null:d.visto_sup_rev,vistoSIl:d.visto_sup_il||null,vistoSDa:d.visto_sup_da||null,rett:d.rett||null,dati:d.dati});
+      if(!r.data||r.data.length<500)break;
+    }
+    return out;
+  },
+  async _rpcAdmin(fn,args){
+    let r;try{r=await this.sb.rpc(fn,args)}catch(x){return{ok:false,errore:x.message||String(x),rete:true}}
+    if(r.error)return{ok:false,errore:r.error.message+(/does not exist|schema cache/i.test(r.error.message)?' (lo script SQL V00.15 è stato eseguito?)':''),rete:erroreRete(r.error)};
+    return r.data||{ok:false,errore:'risposta vuota'};
+  },
+  async importaRegistri(lista){
+    let n=0,s=0;
+    for(let i=0;i<(lista||[]).length;i+=100){
+      const d=await this._rpcAdmin('importa_registri',{p_lista:lista.slice(i,i+100)});
+      if(!d.ok)return Object.assign(d,{importati:n,saltati:s});
+      n+=d.importati||0;s+=d.saltati||0;
+    }
+    return{ok:true,importati:n,saltati:s};
+  },
+  async contaDati(){
+    const c=async t=>{const r=await this.sb.from(t).select('id',{count:'exact',head:true});if(r.error)throw new Error(r.error.message);return r.count||0};
+    return{mesi:Object.keys(DATA).length,registri:await c('registri'),invii:await c('invii_mail')};
+  },
+  async eliminaMese(k){
+    const d=await this._rpcAdmin('elimina_mese',{p_mese:k});
+    if(d.ok){delete DATA[k];this.scriviCache()}
+    return d;
+  },
+  async azzeraDati(){
+    const d=await this._rpcAdmin('azzera_dati_prova',{});
+    if(d.ok){for(const k of Object.keys(DATA))delete DATA[k];this.scriviCache()}
+    return d;
+  },
   /* Visto del responsabile sul registro inviato (o sua revoca con togli=true). */
   async vistaRegistro(k,n,L,pid,togli=false,come=null){
     let r;

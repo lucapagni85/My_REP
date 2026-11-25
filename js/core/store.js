@@ -9,6 +9,9 @@
      salvaPersona(p)                     -> {ok, id} | {ok:false, errore}   (p senza id = nuova persona: l'id lo assegna l'adattatore)
      importa(mesi, anagrafica) / esporta()
      registriTurno(k,n,L) -> [{personaId,rev,inviatoRev,inviatoIl,vistoRev,vistoIl,vistoSRev,vistoSIl,dati}]   (V00.13; vistoS* = visto del supervisore sul registro di un addetto, V00.14.1) registri inviati del turno per ruolo
+     registriTutti() -> [{mese,turno,ruolo,personaId,rev,inviatoRev,inviatoIl,vistoRev,vistoIl,vistoSRev,vistoSIl,rett,dati}]   (V00.15) per il backup completo
+     importaRegistri(lista) -> {ok,importati,saltati}   (V00.15) ripristino da backup
+     contaDati() -> {mesi,registri,invii}   eliminaMese(k) -> {ok,mesi,registri,invii}   azzeraDati() -> {ok,mesi,registri,invii}   (V00.15, solo admin)
      rettificaRegistro(k,n,L,pid,{rep,str,motivo},togli) -> {ok,rett}   (V00.14.2) rettifica dei totali (minuti) da parte del supervisore; rett={rep,str,motivo,chi,il,rev}
      vistaRegistro(k,n,L,pid,togli,come) -> {ok,vistoRev,vistoIl}   (V00.13; come='S' = visto del supervisore su un registro addetto, V00.14.1)
      inviaMail(corpo) -> {ok,...}    (V00.12) avvisi via mail tramite la funzione server; il locale risponde {ok:false,nonDisponibile:true}. Facoltativi: mailAttive, elencoInvii()
@@ -26,12 +29,14 @@ function normalizza(m){
   return m;
 }
 const LocalAdapter={
-  nome:'archivio locale',richiedeLogin:false,LS:'turni_archivio_v1',LSA:'turni_anagrafica_v1',prossimo:1,
+  nome:'archivio locale',richiedeLogin:false,LS:'turni_archivio_v1',LSA:'turni_anagrafica_v1',LSE:'turni_eliminati_v1',prossimo:1,
   async init(){
     let an=null;try{an=JSON.parse(localStorage.getItem(this.LSA)||'null')}catch(e){}
     this.caricaAnag(an&&Array.isArray(an.persone)?an:{persone:typeof ANAG_SEED!=='undefined'?clone(ANAG_SEED):[]});
     let sv={};try{sv=JSON.parse(localStorage.getItem(this.LS)||'{}')}catch(e){}
     const base=Object.assign(typeof SEED_MESI!=='undefined'?clone(SEED_MESI):{},sv);
+    let el=[];try{el=JSON.parse(localStorage.getItem(this.LSE)||'[]')}catch(e){}
+    for(const k of el)if(!(k in sv))delete base[k];   /* mese eliminato: non torna dal seme di prova */
     for(const k of Object.keys(DATA))delete DATA[k];
     for(const k in base)DATA[k]=normalizza(base[k]);
   },
@@ -107,6 +112,37 @@ const LocalAdapter={
     }
     try{localStorage.setItem(this.LSR,JSON.stringify(all))}catch(e){return{ok:false,errore:'memoria del browser non disponibile'}}
     return{ok:true,rett:r.rett?clone(r.rett):null};
+  },
+  /* ---- Strumenti di amministrazione (V00.15) ---- */
+  async registriTutti(){
+    return Object.entries(this.regLeggi()).map(([key,r])=>{const[mese,turno,ruolo,pid]=key.split('|');
+      return Object.assign({vistoRev:null,vistoIl:null,vistoSRev:null,vistoSIl:null,rett:null},clone(r),{mese,turno:+turno,ruolo,personaId:+pid})});
+  },
+  async importaRegistri(lista){
+    const all=this.regLeggi();let n=0;
+    for(const e of lista||[]){
+      if(!e||!e.mese||!e.ruolo||e.personaId==null)continue;
+      all[`${e.mese}|${e.turno}|${e.ruolo}|${e.personaId}`]={dati:clone(e.dati||{}),rev:e.rev||0,inviatoRev:e.inviatoRev===undefined?null:e.inviatoRev,inviatoIl:e.inviatoIl||null,agg:new Date().toISOString(),
+        vistoRev:e.vistoRev===undefined?null:e.vistoRev,vistoIl:e.vistoIl||null,vistoSRev:e.vistoSRev===undefined?null:e.vistoSRev,vistoSIl:e.vistoSIl||null,rett:e.rett?clone(e.rett):null};
+      n++;
+    }
+    try{localStorage.setItem(this.LSR,JSON.stringify(all))}catch(x){return{ok:false,errore:'memoria del browser non disponibile'}}
+    return{ok:true,importati:n,saltati:(lista||[]).length-n};
+  },
+  async contaDati(){return{mesi:Object.keys(DATA).length,registri:Object.keys(this.regLeggi()).length,invii:0}},
+  _eliminati(ks){let el=[];try{el=JSON.parse(localStorage.getItem(this.LSE)||'[]')}catch(e){}try{localStorage.setItem(this.LSE,JSON.stringify([...new Set([...el,...ks])]))}catch(e){}},
+  async eliminaMese(k){
+    if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(k||''))return{ok:false,errore:'mese non valido'};
+    const all=this.regLeggi(),mine=Object.keys(all).filter(x=>x.startsWith(k+'|')),nm=DATA[k]?1:0;
+    for(const x of mine)delete all[x];delete DATA[k];this._eliminati([k]);
+    try{localStorage.setItem(this.LSR,JSON.stringify(all))}catch(e){return{ok:false,errore:'memoria del browser non disponibile'}}
+    this.scrivi();return{ok:true,mesi:nm,registri:mine.length,invii:0};
+  },
+  async azzeraDati(){
+    const c=await this.contaDati();this._eliminati(Object.keys(DATA));
+    for(const k of Object.keys(DATA))delete DATA[k];
+    try{localStorage.setItem(this.LSR,'{}')}catch(e){return{ok:false,errore:'memoria del browser non disponibile'}}
+    this.scrivi();return Object.assign({ok:true},c);
   },
   async inviaMail(){return{ok:false,nonDisponibile:true,errore:'le mail non sono disponibili con l’archivio locale'}},
   async importa(M,A){

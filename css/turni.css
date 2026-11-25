@@ -220,3 +220,8 @@ code{font:.85em ui-monospace,Menlo,Consolas,monospace;background:var(--bg);paddi
   .rg-comp th,.rg-comp td{padding:6px 5px;font-size:.8rem}
   .rg-comp th{font-size:.64rem;letter-spacing:0}
 }
+
+/* V00.15 · strumenti di amministrazione */
+button.danger{color:#9a3b2c;border-color:#d9a79d}
+button.danger:hover:not(:disabled){background:#f8e9e5}
+button:disabled{opacity:.55;cursor:default}

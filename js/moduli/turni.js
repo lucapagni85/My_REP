@@ -251,12 +251,8 @@ function bindGenera(){
   if(!auth){bindLogin();return}
   $('#gm').onchange=e=>{apri(e.target.value);gt=1;gv='turni';render()};
   $('#cm').onclick=()=>{const k=$('#nm').value;if(k){if(!DATA[k]&&!gkNew(k))return;apri(k);gt=1;gv='turni';render()}};
-  $('#ex').onclick=()=>{const b=new Blob([JSON.stringify(Store.esporta(),null,1)],{type:'application/json'});
-    const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='turni_backup_'+iso(new Date())+'_'+CONFIG.versione+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);gmsg='Backup esportato';render()};
-  $('#im').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=async()=>{try{
-    const J=JSON.parse(r.result),M=J.mesi,A=J.anagrafica&&Array.isArray(J.anagrafica.persone)?J.anagrafica:null;if(!M||typeof M!=='object')throw 0;const ks=Object.keys(M);
-    if(!confirm(`Importare ${ks.length} mesi? I mesi già presenti verranno sovrascritti.`+(A?` Verrà sostituita anche l’anagrafica (${A.persone.length} persone).`:' Il backup non contiene l’anagrafica: resta quella attuale.')))return;
-    await Store.importa(M,A);gk=null;gmsg=`Backup importato: ${ks.length} mesi`;render()}catch(x){gmsg=x&&x.message&&!(x instanceof SyntaxError)?'Importazione non riuscita: '+x.message:'File di backup non valido';render()}};r.readAsText(f)};
+  $('#ex').onclick=async()=>{try{const c=await stBackupCompleto();gmsg=`Backup completo scaricato: ${c.persone} persone, ${c.mesi} mesi, ${c.registri} registri`}catch(x){gmsg='Backup non riuscito: '+(x&&x.message?x.message:x)}render()};
+  $('#im').onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=async()=>{try{gmsg=await stImportaOggetto(JSON.parse(r.result));gk=null}catch(x){gmsg=x instanceof SyntaxError?'File di backup non valido':'Importazione non riuscita: '+(x&&x.message?x.message:x)}render()};r.readAsText(f)};
   $('#lo').onclick=()=>{Store.logout();auth=false;gk=null;render()};
   v.querySelectorAll('[data-gt]').forEach(b=>b.onclick=()=>{gt=+b.dataset.gt;gv='turni';if(!draft.turni[gt])draft.turni[gt]={};render()});
   v.querySelectorAll('[data-gv]').forEach(b=>b.onclick=()=>{gv='rec';render()});
@@ -323,6 +319,8 @@ function render(){
     v.innerHTML=viewUtenti();bindUtenti();
   } else if(tab==='mail'){
     v.innerHTML=viewMail();bindMail();
+  } else if(tab==='strumenti'){
+    v.innerHTML=viewStrumenti();bindStrumenti();
   } else {
     v.innerHTML=viewGenera();bindGenera();
   }
@@ -338,14 +336,15 @@ function turnoAl(d){
     return{slot:k,profilo:SLOTS[k][0],area:s.area||SLOTS[k][1],id:p.id||null,nome:p.n,tel:(p.t||[]).filter(Boolean),titolare:tit,note};});
   return{mese:d.slice(0,7),turno:r.n,dal:iso(r.a),al:iso(r.b),rev:mese.rev===undefined?null:mese.rev,righe};
 }
-const TABS={corso:'Turno in corso',archivio:'Archivio turni',genera:'Genera turni',anagrafica:'Anagrafica',utenti:'Utenti',mail:'Mail'};
-/* opz.tabs: quali schede mostrare (Turni: corso, archivio; Amministrazione: genera, anagrafica, utenti, mail) */
+const TABS={corso:'Turno in corso',archivio:'Archivio turni',genera:'Genera turni',anagrafica:'Anagrafica',utenti:'Utenti',mail:'Mail',strumenti:'Strumenti'};
+/* opz.tabs: quali schede mostrare (Turni: corso, archivio; Amministrazione: genera, anagrafica, utenti, mail, strumenti) */
 function montaTurni(root,opz={}){
   if(Store.richiedeLogin)auth=!!Store.admin;          /* con login reale: modifica solo per gli admin */
   const tabs=opz.tabs||['corso','archivio'];
   if(!tabs.includes(tab))tab=tabs[0];
   root.innerHTML=`<div id="m-turni"><nav class="tabs" role="tablist">${tabs.map(t=>`<button role="tab" aria-selected="${t===tab}" data-v="${t}">${TABS[t]}</button>`).join('')}</nav><section id="view"></section></div>`;
-  root.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>{tab=b.dataset.v;root.querySelectorAll('nav.tabs button').forEach(x=>x.setAttribute('aria-selected',x===b));render()});
+  if(tab==='strumenti')stConta=null;   /* all'apertura della scheda i conteggi si rileggono (una volta sola, non a ogni render) */
+  root.querySelectorAll('nav.tabs button').forEach(b=>b.onclick=()=>{tab=b.dataset.v;if(tab==='strumenti')stConta=null;root.querySelectorAll('nav.tabs button').forEach(x=>x.setAttribute('aria-selected',x===b));render()});
   render();
 }
 Moduli.turni={id:'turni',titolo:'Turni',monta:montaTurni,api:{turnoAl}};
